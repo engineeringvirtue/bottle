@@ -3,6 +3,7 @@ extern crate r2d2;
 extern crate diesel;
 extern crate dotenv;
 extern crate chrono;
+#[macro_use]
 extern crate serenity;
 extern crate json;
 #[macro_use]
@@ -71,11 +72,11 @@ fn get_config (path: String) -> Result<Config, Box<std::error::Error>> {
 }
 
 fn main() {
-    let config = Arc::new(get_config("config.json".to_owned()).unwrap());
-    let manager = ConnectionManager::<PgConnection>::new(config.database_path);
+    let config = get_config("config.json".to_owned()).unwrap();
+    let manager = ConnectionManager::<PgConnection>::new(config.clone().database_path);
     let db = r2d2::Pool::builder().build(manager).expect("Error initializing connection pool.");
 
-    let webdb = db.clone(); let webcfg = Arc::clone(&config);
+    let webdb = db.clone(); let webcfg = config.clone();
     thread::spawn( move || web::start_serv(webdb, webcfg));
 
     let mut client = Client::new(&config.token, Handler {db: db.clone()}).expect("Error initializing client.");
@@ -83,7 +84,12 @@ fn main() {
     client.with_framework(
         StandardFramework::new()
             .configure(|c| c.prefix("-"))
+            .command("help", help)
     );
 
     client.start_autosharded().unwrap();
 }
+
+command!(help(ctx, msg) {
+    msg.reply("DM me your message to send it in a bottle to random people in random discord! Administrators, go to the site to change the channel where reports go.");
+});

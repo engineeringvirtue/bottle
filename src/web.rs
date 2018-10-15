@@ -9,21 +9,22 @@ use nickel::extensions::{Redirect};
 use std::collections::HashMap;
 
 use model::*;
-use data::DataAccess;
+use data::*;
 
-pub fn start_serv (db: ConnPool, cfg: Arc<Config>) {
+pub fn start_serv (db: ConnPool, cfg: Config) {
     let mut oauthcfg = oauth2::Config::new(
         cfg.client_id, cfg.client_secret, "https://discordapp.com/api/oauth2/authorize", "https://discordapp.com/api/oauth2/token"
     ).add_scope("identify").set_redirect_url("http://www.google.com").set_state("dogedoge");
 
     let mut serv = Nickel::new();
-    
+
+    serv.utilize(StaticFilesHandler::new("/res"));
+
     serv.get("/auth/redirect", middleware! { |req, res|
-        return res.redirect(oauthcfg.authorize_url().into_string());
+        "wuht"
     });
 
     serv.get("/auth", middleware! { |req, res|
-        println!("goin 2 auth");
         return res.redirect(oauthcfg.authorize_url().into_string());
     });
 
@@ -31,15 +32,12 @@ pub fn start_serv (db: ConnPool, cfg: Arc<Config>) {
         let conn:Conn = db.get().unwrap();
 
         let mut data = HashMap::new();
-        data.insert("bottlecount", conn.get_bottle_count().unwrap());
-        data.insert("usercount", conn.get_user_count().unwrap());
-        data.insert("guildcount", conn.get_guild_count().unwrap());
+        data.insert("bottlecount", get_bottle_count(&conn).unwrap());
+        data.insert("usercount", get_user_count(&conn).unwrap());
+        data.insert("guildcount", get_guild_count(&conn).unwrap());
 
         return res.render("res/home.tpl", &data);
     });
 
-
-
-    serv.utilize(StaticFilesHandler::new("/res"));
     serv.listen("127.0.0.1:8080").unwrap();
 }

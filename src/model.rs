@@ -15,43 +15,58 @@ pub type ConnPool = Pool<ConnectionManager<PgConnection>>;
 pub type Conn = PooledConnection<ConnectionManager<PgConnection>>;
 pub type DTime = NaiveDateTime;
 
-pub type BottleId = MessageId;  
+pub type BottleId = i64;
+pub type GuildId = i64;
+pub type UserId = i64;
+pub type BottleUserId = (BottleId, UserId);
+pub type ReportId = i64;
 #[derive(Queryable, Insertable)]
 #[table_name="bottle"]
 pub struct Bottle {
-    pub user: i64,
+    pub user: UserId,
     pub messageid: i64,
     pub time_pushed: DTime,
     
-    pub reply_to: Option<i64>,
+    pub reply_to: Option<BottleId>,
     pub message: String
 }
 
 #[derive(Queryable, Insertable)]
 #[table_name="user"]
 pub struct User {
-    pub userid: i64,
+    pub userid: UserId,
     pub subscribed: bool,
     pub xp: i64
 }
 
+#[derive(Queryable, Insertable)]
+#[table_name="bottle_user"]
+pub struct BottleUser {
+    pub bottle: BottleId,
+    pub user: UserId,
+    pub time_recieved: DTime
+}
+
 impl User {
-    pub fn new (uid: i64) -> User {
+    pub fn new (uid: UserId) -> User {
         User {userid: uid, subscribed: true, xp: 0}
     }
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Insertable)]
+#[table_name="guild"]
 pub struct Guild {
-    pub guildid: i64,
+    pub guildid: GuildId,
     pub admin_channel: i64
 }
 
-#[derive(Queryable)]
-pub struct BottleReport {
+#[derive(Queryable, Insertable)]
+#[table_name="report"]
+pub struct Report {
     pub bottle: BottleId,
-    pub guild: i64,
-    pub user: i64,
+    pub guild: GuildId,
+    pub user: UserId,
 }
 
+#[derive(Clone)]
 pub struct Config {pub token:String, pub client_id: String, pub client_secret: String, pub database_path:String}
