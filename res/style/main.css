@@ -1,0 +1,8 @@
+@import url('https://fonts.googleapis.com/css?family=Lato');
+
+body {
+    background-color: rgb(1, 3, 7);
+    color: white;
+
+    font-family: Lato;
+}
