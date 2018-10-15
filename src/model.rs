@@ -20,9 +20,9 @@ pub type GuildId = i64;
 pub type UserId = i64;
 pub type BottleUserId = (BottleId, UserId);
 pub type ReportId = i64;
-#[derive(Queryable, Insertable)]
+#[derive(Insertable)]
 #[table_name="bottle"]
-pub struct Bottle {
+pub struct MakeBottle {
     pub user: UserId,
     pub messageid: i64,
     pub time_pushed: DTime,
@@ -31,10 +31,23 @@ pub struct Bottle {
     pub message: String
 }
 
-#[derive(Queryable, Insertable)]
+#[derive(Queryable, Identifiable)]
+#[table_name="bottle"]
+pub struct Bottle {
+    pub id: BottleId,
+
+    pub user: UserId,
+    pub messageid: i64,
+    pub time_pushed: DTime,
+
+    pub reply_to: Option<BottleId>,
+    pub message: String
+}
+
+#[derive(Queryable, Insertable, Identifiable)]
 #[table_name="user"]
 pub struct User {
-    pub userid: UserId,
+    pub id: UserId,
     pub subscribed: bool,
     pub xp: i64
 }
@@ -49,20 +62,29 @@ pub struct BottleUser {
 
 impl User {
     pub fn new (uid: UserId) -> User {
-        User {userid: uid, subscribed: true, xp: 0}
+        User {id: uid, subscribed: true, xp: 0}
     }
 }
 
-#[derive(Queryable, Insertable)]
+#[derive(Queryable, Insertable, Identifiable)]
 #[table_name="guild"]
 pub struct Guild {
-    pub guildid: GuildId,
+    pub id: GuildId,
     pub admin_channel: i64
 }
 
-#[derive(Queryable, Insertable)]
+#[derive(Insertable)]
+#[table_name="report"]
+pub struct MakeReport {
+    pub bottle: BottleId,
+    pub guild: GuildId,
+    pub user: UserId,
+}
+
+#[derive(Queryable, Identifiable)]
 #[table_name="report"]
 pub struct Report {
+    pub id: ReportId,
     pub bottle: BottleId,
     pub guild: GuildId,
     pub user: UserId,
@@ -70,3 +92,5 @@ pub struct Report {
 
 #[derive(Clone)]
 pub struct Config {pub token:String, pub client_id: String, pub client_secret: String, pub database_path:String}
+
+pub type Res<A> = Result<A, Box<std::error::Error>>;

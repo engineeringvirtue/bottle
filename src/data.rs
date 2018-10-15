@@ -11,66 +11,26 @@ use diesel::dsl::*;
 
 use serenity::model as dc;
 
-type Res<A> = Result<A, Error>;
-
-trait OwnsTable<TABLE: query_source::Table> {
-    const TABLE: TABLE;
-}
-
-pub trait CrudOp<Id> where Self: OwnsTable {
-    fn make(&self, id: Id, conn:&Conn) -> Res<Id> {
-        insert_into(Self::TABLE).values(&self).execute(conn)
-    }
-
-    fn get(id: Id, conn:&Conn) -> Res<Self> {
-        select(Self::TABLE.find(id)).first(conn)
-    }
-
-    fn update(&self, id: Id, conn:&Conn) -> Res<()> {
-        update(Self::TABLE.find(id)).set(&self).execute(conn)
-    }
-
-    fn delete(id: Id, conn:&Conn) -> Res<()> {
-        delete(Self::TABLE.find(id)).execute(conn)
-    }
-}
-
-impl OwnsTable for User { const TABLE: query_source::Table = user::table; }
-impl OwnsTable for Guild { const TABLE: query_source::Table = guild::table; }
-impl OwnsTable for Bottle { const TABLE: query_source::Table = bottle::table; }
-impl OwnsTable for BottleUser { const TABLE: query_source::Table = bottle_user::table; }
-impl OwnsTable for Report { const TABLE: query_source::Table = report::table; }
-
-impl CrudOp<UserId> for User {
-    fn get(uid: UserId, conn:&Conn) -> Res<Self> {
+impl User {
+    pub fn get(uid: UserId, conn:&Conn) -> Res<Self> {
         insert_into(user::table)
             .values(&User::new(uid))
-            .on_conflict(user::userid)
+            .on_conflict(user::id)
             .find(uid)
     }
+
+    pub fn update(&self, uid: UserId, conn:&Conn) -> Res<()> {
+        update(user::table.find(uid)).set(self).execute(conn)
+    }
+
+    pub fn get_last_bottle(uid: UserId, conn:&Conn) -> Res<Bottle> {
+        select(bottle::table.filter(bottle::user.eq(uid))).first(conn)
+    }
+
+    pub fn bottles_pending(uid:UserId, conn:&Conn) -> Res<bool> {
+        select(exists(bottle_user::table.filter(bottle_user::user.eq(uid)))).get_result(conn)
+    }
 }
-
-impl CrudOp<GuildId> for Guild {}
-impl CrudOp<BottleId> for Bottle {}
-impl CrudOp<BottleUserId> for BottleUser {}
-impl CrudOp<ReportId> for Report {}
-
-//impl User {
-//    fn get(uid: UserId, conn:&Conn) -> Res<Self> {
-//        insert_into(user::table)
-//            .values(&User::new(uid))
-//            .on_conflict(user::userid)
-//            .find(uid)
-//    }
-//
-//    fn update(&self, uid: UserId, conn:&Conn) -> Res<()> {
-//        update(user::table.find(uid)).set(self).execute(conn)
-//    }
-//
-//    fn get_last_bottle(uid: UserId, conn:&Conn) -> Res<Bottle> {
-//        bottle::table.filter(bottle::user.eq(uid)).first(conn)
-//    }
-//}
 //
 //impl Guild {
 //    fn get(gid: GuildId, conn:&Conn) -> Res<GuildId> {
@@ -86,11 +46,11 @@ impl CrudOp<ReportId> for Report {}
 //    }
 //}
 //
-//impl Bottle {
-//    fn make(&self, conn:&Conn) -> Res<BottleId> {
-//
-//    }
-//
+impl MakeBottle {
+    pub fn make(&self, conn:&Conn) -> Res<Bottle> {
+        insert_into(bottle::table).values(&self).get_result(conn)
+    }
+
 //    fn get(bid: BottleId, conn:&Conn) -> Res<Self> {
 //
 //    }
@@ -102,7 +62,7 @@ impl CrudOp<ReportId> for Report {}
 //    fn update(&self, bid:BottleId, conn:&Conn) -> Res<()> {
 //
 //    }
-//}
+}
 //
 //impl BottleUser {
 //    fn make(&self, conn:&Conn) -> Res<BottleUserId> {

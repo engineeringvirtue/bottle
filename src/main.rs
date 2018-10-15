@@ -14,6 +14,7 @@ pub mod schema;
 pub mod data;
 pub mod model;
 pub mod web;
+pub mod bottle;
 
 use chrono::prelude::*;
 use std::thread;
@@ -31,6 +32,7 @@ use serenity::model::event::*;
 use serenity::model::id::*;
 
 use schema::*;
+use data::*;
 use model::*;
 
 const PUSHXP: i64 = 120;
@@ -48,14 +50,16 @@ impl EventHandler for Handler {
         match new_message.channel() {
             Some(Channel::Private(ref channel)) if !new_message.author.bot => {
                 let channel = channel.read();
-                let userid = *new_message.author.id.as_u64() as i64;
-                let bottle = Bottle {messageid: *new_message.id.as_u64() as i64, reply_to: None, user: userid, time_pushed: Utc::now().naive_utc(), message: new_message.content};
 
-                let conn = self.db.get().unwrap();
-                diesel::insert_into(user::table).values(User::new(userid)).on_conflict_do_nothing().execute(&conn); //create user
-                diesel::insert_into(bottle::table).values(&bottle).execute(&conn).expect("Error making bottle"); //insert bottle
+                let conn = self.db.get()?;
 
-                channel.say("Your message has been ~~discarded~~ pushed into the dark seas of discord!").unwrap();
+                let user = User::get(new_message.author.id.as_u64() as i64, &conn)?;
+                let bottle = MakeBottle { messageid: *new_message.id.as_u64() as i64, reply_to: None, user: user.id, time_pushed: Utc::now().naive_utc(), message: new_message.content };
+
+                bottle::distribute_bottle(bottle, &ctx, &conn)?;
+
+                new_message.reply("Your message has been ~~discarded~~ pushed into the dark seas of discord!")?;
+
             }, _ => ()
         }
     }

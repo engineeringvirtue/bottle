@@ -1,6 +1,6 @@
 table! {
-    bottle (bottleid) {
-        bottleid -> Int8,
+    bottle (id) {
+        id -> Int8,
         user -> Int8,
         reply_to -> Nullable<Int8>,
         messageid -> Int8,
@@ -19,15 +19,15 @@ table! {
 }
 
 table! {
-    guild (guildid) {
-        guildid -> Int8,
+    guild (id) {
+        id -> Int8,
         admin_channel -> Int8,
     }
 }
 
 table! {
-    report (reportid) {
-        reportid -> Int8,
+    report (id) {
+        id -> Int8,
         bottle -> Int8,
         guild -> Int8,
         messageid -> Int8,
@@ -36,8 +36,8 @@ table! {
 }
 
 table! {
-    user (userid) {
-        userid -> Int8,
+    user (id) {
+        id -> Int8,
         subscribed -> Bool,
         token -> Nullable<Text>,
         xp -> Int8,
