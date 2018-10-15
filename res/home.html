@@ -5,9 +5,8 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Bottled Discord | Home</title>
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="style/main.css">
-
     <style>
         .main {
             display: flex;
@@ -49,7 +48,16 @@
             <div class="bottle"><img id="bottle" src="img/bottle.png"></div>
         </div>
 
-        <div class="footer"> FOoTR </div>
+        <div class="footer">
+            <script language="JavaScript">
+                function y2k(number) {
+                    return (number < 1000) ? number + 1900 : number;
+                }
+                var today = new Date();
+                var year = y2k(today.getYear());
+                document.write('© ' + year + ' Bottled Discord - All Rights Reserved');
+            </script>
+        </div>
     </div>
 </body>
 
