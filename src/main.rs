@@ -1,8 +1,9 @@
+#![feature(try_blocks)]
+
 extern crate r2d2;
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
-extern crate chrono;
 #[macro_use]
 extern crate serenity;
 extern crate json;
@@ -12,11 +13,11 @@ extern crate oauth2;
 
 pub mod schema;
 pub mod data;
+#[macro_use]
 pub mod model;
 pub mod web;
 pub mod bottle;
 
-use chrono::prelude::*;
 use std::thread;
 use std::fs::read_to_string;
 use std::sync::{Arc};
@@ -26,7 +27,7 @@ use diesel::r2d2::ConnectionManager;
 use dotenv::dotenv;
 
 use serenity::prelude::*;
-use serenity::framework::standard::StandardFramework;
+use serenity::framework::standard::{Args, DispatchError, StandardFramework, HelpBehaviour, CommandOptions, help_commands};
 use serenity::model::channel::{Message, Channel};
 use serenity::model::event::*;
 use serenity::model::id::*;
@@ -39,26 +40,37 @@ const PUSHXP: i64 = 120;
 const KEEPXP: i64 = 75;
 const COOLDOWN: i32 = 100;
 
+fn handle_err<F: Fn() -> Res<String>> (replymsg: &Message, handler: F) {
+    match handler() {
+        Ok(x) => replymsg.reply(&x),
+        Err(x) => replymsg.reply(&x.to_string())
+    }.unwrap();
+}
+
 struct Handler {pub db: ConnPool}
 impl EventHandler for Handler {
     fn ready(&self, ctx:Context, data_about_bot: serenity::model::gateway::Ready) {
         let pfp = serenity::utils::read_image("./assets/icon.png").unwrap();
         ctx.edit_profile(|p| p.avatar(Some(&pfp))).unwrap();
     }
-    
+
     fn message(&self, ctx: Context, new_message: Message) {
         match new_message.channel() {
             Some(Channel::Private(ref channel)) if !new_message.author.bot => {
                 let channel = channel.read();
+                let userid = *new_message.author.id.as_u64() as i64;
+                let msgid = *new_message.id.as_u64() as i64;
 
-                let conn = self.db.get()?;
+                handle_err(&new_message, || -> Res<String> {
+                    let conn = self.db.get()?;
 
-                let user = User::get(new_message.author.id.as_u64() as i64, &conn)?;
-                let bottle = MakeBottle { messageid: *new_message.id.as_u64() as i64, reply_to: None, user: user.id, time_pushed: Utc::now().naive_utc(), message: new_message.content };
+                    let user = User::get(userid, &conn)?;
+                    let bottle = MakeBottle { messageid: msgid, reply_to: None, user: user.id, time_pushed: std::time::SystemTime::now(), message: new_message.content.clone() };
 
-                bottle::distribute_bottle(bottle, &ctx, &conn)?;
+                    bottle::distribute_bottle(bottle, &ctx, &conn)?;
 
-                new_message.reply("Your message has been ~~discarded~~ pushed into the dark seas of discord!")?;
+                    Ok ("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_string())
+                });
 
             }, _ => ()
         }
@@ -88,12 +100,10 @@ fn main() {
     client.with_framework(
         StandardFramework::new()
             .configure(|c| c.prefix("-"))
-            .command("help", help)
+            .customised_help(help_commands::with_embeds, |c| {
+                c.individual_command_tip("DM me your message to send it in a bottle to random people in random discord! Administrators, go to the site to change the channel where reports go.")
+            })
     );
 
     client.start_autosharded().unwrap();
 }
-
-command!(help(ctx, msg) {
-    msg.reply("DM me your message to send it in a bottle to random people in random discord! Administrators, go to the site to change the channel where reports go.");
-});

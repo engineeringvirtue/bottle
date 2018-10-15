@@ -1,7 +1,7 @@
+use std;
 use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use r2d2::{Pool, PooledConnection};
-use chrono::NaiveDateTime;
 
 use serenity::prelude::*;
 use serenity::framework::standard::StandardFramework;
@@ -13,7 +13,7 @@ use super::schema::*;
 
 pub type ConnPool = Pool<ConnectionManager<PgConnection>>;
 pub type Conn = PooledConnection<ConnectionManager<PgConnection>>;
-pub type DTime = NaiveDateTime;
+pub type DTime = std::time::SystemTime;
 
 pub type BottleId = i64;
 pub type GuildId = i64;
@@ -25,9 +25,9 @@ pub type ReportId = i64;
 pub struct MakeBottle {
     pub user: UserId,
     pub messageid: i64,
-    pub time_pushed: DTime,
-    
     pub reply_to: Option<BottleId>,
+
+    pub time_pushed: DTime,
     pub message: String
 }
 
@@ -37,10 +37,10 @@ pub struct Bottle {
     pub id: BottleId,
 
     pub user: UserId,
+    pub reply_to: Option<BottleId>,
     pub messageid: i64,
     pub time_pushed: DTime,
 
-    pub reply_to: Option<BottleId>,
     pub message: String
 }
 
@@ -49,6 +49,7 @@ pub struct Bottle {
 pub struct User {
     pub id: UserId,
     pub subscribed: bool,
+    pub token: Option<String>,
     pub xp: i64
 }
 
@@ -62,7 +63,7 @@ pub struct BottleUser {
 
 impl User {
     pub fn new (uid: UserId) -> User {
-        User {id: uid, subscribed: true, xp: 0}
+        User {id: uid, subscribed: true, token: None, xp: 0}
     }
 }
 

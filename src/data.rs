@@ -7,29 +7,31 @@ use r2d2::{Pool, PooledConnection};
 use diesel::pg::PgConnection;
 use schema::*;
 use diesel::*;
+use diesel::pg::upsert::*;
 use diesel::dsl::*;
 
 use serenity::model as dc;
 
+type Res<A> = Result<A, result::Error>;
+
 impl User {
     pub fn get(uid: UserId, conn:&Conn) -> Res<Self> {
-        insert_into(user::table)
-            .values(&User::new(uid))
-            .on_conflict(user::id)
-            .find(uid)
+        Ok(match user::table.find(uid).first(conn) {
+            Ok(x) => x, _ => User::new(uid)
+        })
     }
 
-    pub fn update(&self, uid: UserId, conn:&Conn) -> Res<()> {
-        update(user::table.find(uid)).set(self).execute(conn)
-    }
-
-    pub fn get_last_bottle(uid: UserId, conn:&Conn) -> Res<Bottle> {
-        select(bottle::table.filter(bottle::user.eq(uid))).first(conn)
-    }
-
-    pub fn bottles_pending(uid:UserId, conn:&Conn) -> Res<bool> {
-        select(exists(bottle_user::table.filter(bottle_user::user.eq(uid)))).get_result(conn)
-    }
+//    pub fn update(&self, uid: UserId, conn:&Conn) -> Res<()> {
+//        insert_into(user::table).values(self).execute(conn)
+//    }
+//
+//    pub fn get_last_bottle(uid: UserId, conn:&Conn) -> Res<Bottle> {
+//        select(bottle::table.filter(bottle::user.eq(uid))).first(conn)
+//    }
+//
+//    pub fn bottles_pending(uid:UserId, conn:&Conn) -> Res<bool> {
+//        select(exists(bottle_user::table.filter(bottle_user::user.eq(uid)))).get_result(conn)
+//    }
 }
 //
 //impl Guild {
@@ -48,7 +50,7 @@ impl User {
 //
 impl MakeBottle {
     pub fn make(&self, conn:&Conn) -> Res<Bottle> {
-        insert_into(bottle::table).values(&self).get_result(conn)
+        insert_into(bottle::table).values(self).get_result(conn)
     }
 
 //    fn get(bid: BottleId, conn:&Conn) -> Res<Self> {

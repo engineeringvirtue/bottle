@@ -4,7 +4,6 @@ version = "0.1.0"
 authors = ["Thomas-QM <thomas@engineeringvirtue.net>"]
 
 [dependencies]
-chrono = "0.4.6"
 serenity = "0.5.9"
 json = "0.11.13"
 r2d2 = "0.8.2"
