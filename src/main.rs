@@ -1,10 +1,11 @@
 #![feature(try_blocks)]
+#![allow(proc_macro_derive_resolution_fallback)]
 
+extern crate chrono;
 extern crate r2d2;
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
-#[macro_use]
 extern crate serenity;
 extern crate json;
 #[macro_use]
@@ -21,63 +22,82 @@ pub mod bottle;
 use std::thread;
 use std::fs::read_to_string;
 use std::sync::{Arc};
-use diesel::prelude::*;
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
-use dotenv::dotenv;
 
 use serenity::prelude::*;
 use serenity::framework::standard::{Args, DispatchError, StandardFramework, HelpBehaviour, CommandOptions, help_commands};
 use serenity::model::channel::{Message, Channel};
 use serenity::model::event::*;
-use serenity::model::id::*;
 
-use schema::*;
 use data::*;
 use model::*;
+use model::id::*;
 
-const PUSHXP: i64 = 120;
-const KEEPXP: i64 = 75;
-const COOLDOWN: i32 = 100;
-
-fn handle_err<F: Fn() -> Res<String>> (replymsg: &Message, handler: F) {
-    match handler() {
+fn handle_err<F: Fn() -> Res<String>> (replymsg: &Message, handler: F) -> Res<String> {
+    let res = handler();
+    match &res {
         Ok(x) => replymsg.reply(&x),
         Err(x) => replymsg.reply(&x.to_string())
-    }.unwrap();
+    };
+
+    res
 }
 
 struct Handler {pub db: ConnPool}
 impl EventHandler for Handler {
-    fn ready(&self, ctx:Context, data_about_bot: serenity::model::gateway::Ready) {
-        let pfp = serenity::utils::read_image("./assets/icon.png").unwrap();
-        ctx.edit_profile(|p| p.avatar(Some(&pfp))).unwrap();
+    fn ready(&self, _ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
+        println!("Ready!");
     }
 
     fn message(&self, ctx: Context, new_message: Message) {
+        let conn = self.db.get().unwrap();
+
+        let new_bottle = |guild| {
+            handle_err (&new_message, || {
+                let userid = new_message.author.id.as_i64();
+                let msgid = new_message.id.as_i64();
+
+                //TODO: check cooldown
+                let mut user = User::get(userid, &conn);
+                user.xp += PUSHXP;
+                user.update(&conn)?;
+
+                let bottle = MakeBottle { message: msgid, reply_to: None, guild, user: user.id, time_pushed: now(), contents: new_message.content.clone() };
+
+                bottle::distribute_bottle(bottle, &ctx, &conn)?;
+
+                Ok ("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_string())
+            });
+        };
+
         match new_message.channel() {
-            Some(Channel::Private(ref channel)) if !new_message.author.bot => {
+            Some(Channel::Guild(ref channel)) => {
                 let channel = channel.read();
-                let userid = *new_message.author.id.as_u64() as i64;
-                let msgid = *new_message.id.as_u64() as i64;
+                let gid = channel.guild_id.as_i64();
+                let guilddata = Guild::get(gid, &conn);
 
-                handle_err(&new_message, || -> Res<String> {
-                    let conn = self.db.get()?;
+                if Some(channel.id.as_i64()) == guilddata.bottle_channel {
+                    new_bottle(Some(gid))
+                }
+            },
 
-                    let user = User::get(userid, &conn)?;
-                    let bottle = MakeBottle { messageid: msgid, reply_to: None, user: user.id, time_pushed: std::time::SystemTime::now(), message: new_message.content.clone() };
-
-                    bottle::distribute_bottle(bottle, &ctx, &conn)?;
-
-                    Ok ("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_string())
-                });
-
-            }, _ => ()
-        }
+            Some(Channel::Private(ref channel)) if !new_message.author.bot => new_bottle(None)
+            , _ => ()
+        };
     }
 
-    fn message_update(&self, ctx: Context, new_data: MessageUpdateEvent) {
+    fn message_update(&self, _ctx: Context, _new_data: MessageUpdateEvent) {
         //TODO: support message edits and deletion
+    }
+
+    fn guild_create (&self, _ctx: Context, guild: serenity::model::guild::Guild, _is_new: bool) {
+        let conn = &self.db.get().unwrap();
+        Guild::get(guild.id.as_i64(), &conn).update(&conn).unwrap();
+    }
+
+    fn guild_delete (&self, _ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
+        Guild::delete(incomplete.id.as_i64(), &self.db.get().unwrap()).unwrap();
     }
 }
 
@@ -100,8 +120,10 @@ fn main() {
     client.with_framework(
         StandardFramework::new()
             .configure(|c| c.prefix("-"))
-            .customised_help(help_commands::with_embeds, |c| {
-                c.individual_command_tip("DM me your message to send it in a bottle to random people in random discord! Administrators, go to the site to change the channel where reports go.")
+            .help(|f, msg, opts, cmds, args | {
+                msg.reply("DM me your message to send it in a bottle to random people in random discord! Administrators, go to the site to change the channel where reports go.")?;
+
+                Ok(())
             })
     );
 

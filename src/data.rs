@@ -1,89 +1,83 @@
 use model::*;
 
 use diesel::prelude::*;
-use std::error::Error;
-use diesel::r2d2::ConnectionManager;
-use r2d2::{Pool, PooledConnection};
-use diesel::pg::PgConnection;
 use schema::*;
 use diesel::*;
-use diesel::pg::upsert::*;
-use diesel::dsl::*;
-
-use serenity::model as dc;
 
 type Res<A> = Result<A, result::Error>;
 
+mod functions {
+    use diesel::sql_types::*;
+
+    no_arg_sql_function!(random, (), "Represents the postgresql random() function");
+    sql_function!(estimate_rows, Estimate, (tablename: Text) -> Int8);
+}
+
+use self::functions::*;
+
 impl User {
-    pub fn get(uid: UserId, conn:&Conn) -> Res<Self> {
-        Ok(match user::table.find(uid).first(conn) {
-            Ok(x) => x, _ => User::new(uid)
-        })
+    pub fn get(uid: UserId, conn:&Conn) -> Self {
+        user::table.find(uid).first(conn).unwrap_or_else(|_| User::new(uid))
     }
 
-//    pub fn update(&self, uid: UserId, conn:&Conn) -> Res<()> {
-//        insert_into(user::table).values(self).execute(conn)
-//    }
+    pub fn update(&self, conn:&Conn) -> Res<usize> {
+        insert_into(user::table).values(self).on_conflict(user::id).do_update().set(self).execute(conn)
+    }
 //
 //    pub fn get_last_bottle(uid: UserId, conn:&Conn) -> Res<Bottle> {
 //        select(bottle::table.filter(bottle::user.eq(uid))).first(conn)
 //    }
 //
-//    pub fn bottles_pending(uid:UserId, conn:&Conn) -> Res<bool> {
-//        select(exists(bottle_user::table.filter(bottle_user::user.eq(uid)))).get_result(conn)
-//    }
 }
 //
-//impl Guild {
-//    fn get(gid: GuildId, conn:&Conn) -> Res<GuildId> {
-//
-//    }
-//
-//    fn update(&self, gid: GuildId, conn:&Conn) -> Res<()> {
-//
-//    }
-//
-//    fn delete(gid: GuildId, conn:&Conn) -> Res<()> {
-//
-//    }
-//}
+impl Guild {
+    pub fn get(gid: GuildId, conn:&Conn) -> Self {
+        guild::table.find(gid).first(conn).unwrap_or_else(|_| Guild::new(gid))
+    }
+
+    pub fn update(&self, conn:&Conn) -> Res<usize> {
+        insert_into(guild::table).values(self).on_conflict(guild::id).do_update().set(self).execute(conn)
+    }
+
+    pub fn get_random(conn:&Conn) -> Res<Self> {
+        guild::table.filter(guild::bottle_channel.is_not_null()).order(random).first(conn)
+    }
+
+    pub fn delete(gid: GuildId, conn:&Conn) -> Res<usize> {
+        delete(guild::table).filter(guild::id.eq(gid)).execute(conn)
+    }
+}
 //
 impl MakeBottle {
     pub fn make(&self, conn:&Conn) -> Res<Bottle> {
         insert_into(bottle::table).values(self).get_result(conn)
     }
-
-//    fn get(bid: BottleId, conn:&Conn) -> Res<Self> {
-//
-//    }
-//
-//    fn get_from_message(mid: i64, conn:&Conn) -> Res<Self> {
-//
-//    }
-//
-//    fn update(&self, bid:BottleId, conn:&Conn) -> Res<()> {
-//
-//    }
 }
-//
-//impl BottleUser {
-//    fn make(&self, conn:&Conn) -> Res<BottleUserId> {
-//
-//    }
-//
-//    fn get(buid:BottleUserId, conn:&Conn) -> Res<Self> {
-//
-//    }
-//
-//    fn get_from_message(mid:i64, conn:&Conn) -> Res<Self> {
-//
-//    }
-//
-//    fn del(buid:BottleUserId, conn:&Conn) -> Res<()> {
-//
-//    }
-//}
-//
+
+impl MakeGuildBottle {
+    pub fn make(&self, conn:&Conn) -> Res<GuildBottle> {
+        insert_into(guild_bottle::table).values(self).get_result(conn)
+    }
+}
+
+impl GuildBottle {
+    pub fn get(buid:GuildBottleId, conn:&Conn) -> Res<Self> {
+        guild_bottle::table.find(buid).get_result(conn)
+    }
+
+    pub fn get_from_message(mid:i64, conn:&Conn) -> Res<Self> {
+        guild_bottle::table.filter(guild_bottle::message.eq(mid)).get_result(conn)
+    }
+
+    pub fn get_from_guild(g:&Guild, conn:&Conn) -> Res<Self> {
+        GuildBottle::belonging_to(g).order(guild_bottle::time_recieved.desc()).first(conn)
+    }
+
+    pub fn delete(buid:GuildBottleId, conn:&Conn) -> Res<usize> {
+        delete(guild_bottle::table.find(buid)).execute(conn)
+    }
+}
+
 //impl Report {
 //    fn make(&self, conn:&Conn) -> Res<ReportId> {
 //
@@ -99,13 +93,13 @@ impl MakeBottle {
 //}
 
 pub fn get_bottle_count (conn: &Conn) -> Res<i64> {
-    bottle::table.select(count_star()).first(conn)
+    select(estimate_rows("bottle".to_string())).get_result(conn)
 }
 
 pub fn get_user_count (conn: &Conn) -> Res<i64> {
-    user::table.select(count_star()).first(conn)
+    select(estimate_rows("user".to_string())).get_result(conn)
 }
 
 pub fn get_guild_count (conn: &Conn) -> Res<i64> {
-    guild::table.select(count_star()).first(conn)
+    select(estimate_rows("guild".to_string())).get_result(conn)
 }

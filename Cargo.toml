@@ -7,6 +7,7 @@ authors = ["Thomas-QM <thomas@engineeringvirtue.net>"]
 serenity = "0.5.9"
 json = "0.11.13"
 r2d2 = "0.8.2"
+chrono = "0.4"
 diesel = { version = "1.0.0", features = ["postgres", "chrono", "r2d2"] }
 dotenv = "0.13.0"
 nickel = "0.10.1"

@@ -1,8 +1,4 @@
 use oauth2;
-use r2d2::Pool;
-use std::sync::{Arc};
-use diesel::pg::PgConnection;
-use diesel::r2d2::ConnectionManager;
 use nickel::{Nickel, StaticFilesHandler, HttpRouter};
 use nickel::extensions::{Redirect};
 
@@ -12,7 +8,7 @@ use model::*;
 use data::*;
 
 pub fn start_serv (db: ConnPool, cfg: Config) {
-    let mut oauthcfg = oauth2::Config::new(
+    let oauthcfg = oauth2::Config::new(
         cfg.client_id, cfg.client_secret, "https://discordapp.com/api/oauth2/authorize", "https://discordapp.com/api/oauth2/token"
     ).add_scope("identify").set_redirect_url("http://www.google.com").set_state("dogedoge");
 
@@ -36,7 +32,7 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
         data.insert("usercount", get_user_count(&conn).unwrap());
         data.insert("guildcount", get_guild_count(&conn).unwrap());
 
-        return res.render("res/home.tpl", &data);
+        return res.render("res/home.html", &data);
     });
 
     serv.listen("127.0.0.1:8080").unwrap();

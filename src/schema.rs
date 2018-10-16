@@ -1,36 +1,43 @@
 table! {
-    bottle (id) {
-        id -> Int8,
+    ban (user) {
+        report -> Int8,
         user -> Int8,
-        reply_to -> Nullable<Int8>,
-        messageid -> Int8,
-        time_pushed -> Timestamp,
-        message -> Text,
     }
 }
 
 table! {
-    bottle_user (bottle, user) {
-        bottle -> Int8,
+    bottle (id) {
+        id -> Int8,
+        reply_to -> Nullable<Int8>,
         user -> Int8,
-        messageid -> Int8,
-        time_recieved -> Timestamp,
+        message -> Int8,
+        guild -> Nullable<Int8>,
+        time_pushed -> Timestamp,
+        contents -> Text,
     }
 }
 
 table! {
     guild (id) {
         id -> Int8,
-        admin_channel -> Int8,
+        bottle_channel -> Nullable<Int8>,
+        admin_channel -> Nullable<Int8>,
     }
 }
 
 table! {
-    report (id) {
+    guild_bottle (id) {
         id -> Int8,
         bottle -> Int8,
         guild -> Int8,
-        messageid -> Int8,
+        message -> Int8,
+        time_recieved -> Timestamp,
+    }
+}
+
+table! {
+    report (bottle) {
+        bottle -> Int8,
         user -> Int8,
     }
 }
@@ -40,21 +47,25 @@ table! {
         id -> Int8,
         subscribed -> Bool,
         token -> Nullable<Text>,
-        xp -> Int8,
+        xp -> Int4,
+        admin -> Bool,
     }
 }
 
+joinable!(ban -> report (report));
+joinable!(ban -> user (user));
+joinable!(bottle -> guild (guild));
 joinable!(bottle -> user (user));
-joinable!(bottle_user -> bottle (bottle));
-joinable!(bottle_user -> user (user));
+joinable!(guild_bottle -> bottle (bottle));
+joinable!(guild_bottle -> guild (guild));
 joinable!(report -> bottle (bottle));
-joinable!(report -> guild (guild));
 joinable!(report -> user (user));
 
 allow_tables_to_appear_in_same_query!(
+    ban,
     bottle,
-    bottle_user,
     guild,
+    guild_bottle,
     report,
     user,
 );
