@@ -26,7 +26,6 @@ CREATE TABLE "bottle" (
 
 CREATE TABLE "user" (
 	"id" bigint NOT NULL,
-	"subscribed" bool NOT NULL DEFAULT 'true',
 	"token" TEXT DEFAULT 'NULL',
 	"xp" integer NOT NULL DEFAULT '0',
 	"admin" bool NOT NULL DEFAULT 'false',
@@ -40,7 +39,7 @@ CREATE TABLE "user" (
 CREATE TABLE "guild_bottle" (
 	"id" bigserial NOT NULL,
 	"bottle" bigserial NOT NULL UNIQUE,
-	"guild" bigint NOT NULL UNIQUE,
+	"guild" bigint NOT NULL,
 	"message" bigint NOT NULL UNIQUE,
 	"time_recieved" TIMESTAMP NOT NULL DEFAULT 'NOW()',
 	CONSTRAINT guild_bottle_pk PRIMARY KEY ("id")
