@@ -13,10 +13,14 @@ CREATE TABLE "bottle" (
 	"id" bigserial NOT NULL,
 	"reply_to" bigint,
 	"user" bigint NOT NULL,
+
 	"message" bigint NOT NULL UNIQUE,
 	"guild" bigint,
 	"time_pushed" TIMESTAMP NOT NULL DEFAULT 'NOW()',
+
 	"contents" TEXT NOT NULL,
+	"url" TEXT,
+	"image" TEXT,
 	CONSTRAINT bottle_pk PRIMARY KEY ("id")
 ) WITH (
   OIDS=FALSE
@@ -26,7 +30,8 @@ CREATE TABLE "bottle" (
 
 CREATE TABLE "user" (
 	"id" bigint NOT NULL,
-	"token" TEXT DEFAULT 'NULL',
+	"session" UUID UNIQUE,
+	"token" TEXT,
 	"xp" integer NOT NULL DEFAULT '0',
 	"admin" bool NOT NULL DEFAULT 'false',
 	CONSTRAINT user_pk PRIMARY KEY ("id")
@@ -38,7 +43,7 @@ CREATE TABLE "user" (
 
 CREATE TABLE "guild_bottle" (
 	"id" bigserial NOT NULL,
-	"bottle" bigserial NOT NULL UNIQUE,
+	"bottle" bigserial NOT NULL,
 	"guild" bigint NOT NULL,
 	"message" bigint NOT NULL UNIQUE,
 	"time_recieved" TIMESTAMP NOT NULL DEFAULT 'NOW()',

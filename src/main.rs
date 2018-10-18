@@ -1,11 +1,15 @@
 #![feature(try_blocks)]
 #![allow(proc_macro_derive_resolution_fallback)]
 
+extern crate time;
 extern crate chrono;
 extern crate r2d2;
+extern crate uuid;
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
+extern crate typemap;
+#[macro_use]
 extern crate serenity;
 extern crate json;
 #[macro_use]
@@ -22,82 +26,123 @@ pub mod bottle;
 use std::thread;
 use std::fs::read_to_string;
 use std::sync::{Arc};
+use time::Duration;
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
 
 use serenity::prelude::*;
-use serenity::framework::standard::{Args, DispatchError, StandardFramework, HelpBehaviour, CommandOptions, help_commands};
-use serenity::model::channel::{Message, Channel};
+use serenity::framework::standard::{Args, CommandError, DispatchError, StandardFramework, HelpBehaviour, CommandOptions, help_commands};
+use serenity::model::channel::{Message, Channel, Embed, Attachment};
 use serenity::model::event::*;
+use serenity::model::gateway;
+use serenity::model::permissions::Permissions;
+use serenity::CACHE as cache;
 
 use data::*;
 use model::*;
 use model::id::*;
 
-fn handle_err<F: Fn() -> Res<String>> (replymsg: &Message, handler: F) -> Res<String> {
-    let res = handler();
-    match &res {
-        Ok(x) => replymsg.reply(&x),
-        Err(x) => replymsg.reply(&x.to_string())
-    };
+const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
 
-    res
+fn handle_ev_err<F: Fn() -> Res<String>> (replymsg: &Message, handler: F) {
+    match handler() {
+        Ok(x) => replymsg.reply(&x).ok(),
+        Err(x) => replymsg.reply(&x.to_string()).ok()
+    };
 }
 
-struct Handler {pub db: ConnPool}
+struct Handler;
 impl EventHandler for Handler {
-    fn ready(&self, _ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
+    fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
+        ctx.set_presence(Some(gateway::Game {kind: gateway::GameType::Listening, name: "you, try -help".to_owned(), url: None})
+                         , serenity::model::user::OnlineStatus::DoNotDisturb);
         println!("Ready!");
     }
 
     fn message(&self, ctx: Context, new_message: Message) {
-        let conn = self.db.get().unwrap();
+        if !new_message.author.bot {
+            let conn = ctx.get_conn();
 
-        let new_bottle = |guild| {
-            handle_err (&new_message, || {
-                let userid = new_message.author.id.as_i64();
-                let msgid = new_message.id.as_i64();
+            let new_bottle = |guild| {
+                handle_ev_err(&new_message, || {
+                    let userid = new_message.author.id.as_i64();
+                    let msgid = new_message.id.as_i64();
 
-                //TODO: check cooldown
-                let mut user = User::get(userid, &conn);
-                user.xp += PUSHXP;
-                user.update(&conn)?;
+                    let mut user = User::get(userid, &conn);
+                    match user.get_last_bottle(&conn) {
+                        Ok(ref bottle) if now().signed_duration_since(bottle.time_pushed) < Duration::minutes(COOLDOWN) && !user.admin => {
+                            return Err("You must wait 45 minutes before sending another bottle!".into())
+                        },
+                        _ => ()
+                    }
 
-                let bottle = MakeBottle { message: msgid, reply_to: None, guild, user: user.id, time_pushed: now(), contents: new_message.content.clone() };
+                    let mut contents = new_message.content.clone();
+                    let replyto = match guild {
+                        Some (g) if (&contents).starts_with(REPLY_PREFIX) => {
+                            contents = contents.chars().skip(REPLY_PREFIX.chars().count()).collect();
+                            let gbottle = Guild::get(g, &conn).get_last_bottle(&conn).map_err(|_| "No bottle to reply found!")?;
+                            Some (gbottle.bottle)
+                        }, _ => None
+                    };
 
-                bottle::distribute_bottle(bottle, &ctx, &conn)?;
+                    let url = new_message.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
+                    let image = new_message.attachments.get(0).and_then(|a: &Attachment| a.dimensions().map(|_| a.url.clone()));
 
-                Ok ("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_string())
-            });
-        };
+                    user.xp += match replyto {Some(_) => REPLYXP, None => PUSHXP};
+                    user.update(&conn)?;
 
-        match new_message.channel() {
-            Some(Channel::Guild(ref channel)) => {
-                let channel = channel.read();
-                let gid = channel.guild_id.as_i64();
-                let guilddata = Guild::get(gid, &conn);
+                    let bottle = MakeBottle { message: msgid, reply_to: replyto, guild, user: user.id, time_pushed: now(), contents, url, image };
+                    let connpool = ctx.get_pool();
+                    thread::spawn(move || {
+                        bottle::distribute_bottle(bottle, &connpool.get_conn()).ok();
+                    });
 
-                if Some(channel.id.as_i64()) == guilddata.bottle_channel {
-                    new_bottle(Some(gid))
-                }
-            },
+                    Ok("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned())
+                });
+            };
 
-            Some(Channel::Private(ref channel)) if !new_message.author.bot => new_bottle(None)
-            , _ => ()
-        };
+            match new_message.channel() {
+                Some(Channel::Guild(ref channel)) => {
+                    let channel = channel.read();
+                    let gid = channel.guild_id.as_i64();
+                    let guilddata = Guild::get(gid, &conn);
+
+                    if Some(channel.id.as_i64()) == guilddata.bottle_channel {
+                        new_bottle(Some(gid))
+                    }
+                },
+
+                Some(Channel::Private(_)) => new_bottle(None)
+                ,
+                _ => ()
+            };
+        }
     }
 
     fn message_update(&self, _ctx: Context, _new_data: MessageUpdateEvent) {
         //TODO: support message edits and deletion
     }
 
-    fn guild_create (&self, _ctx: Context, guild: serenity::model::guild::Guild, _is_new: bool) {
-        let conn = &self.db.get().unwrap();
-        Guild::get(guild.id.as_i64(), &conn).update(&conn).unwrap();
+    fn guild_create (&self, ctx: Context, guild: serenity::model::guild::Guild, is_new: bool) {
+        let conn = ctx.get_conn();
+        let guilddata = Guild::get(guild.id.as_i64(), &conn);
+        let user = &cache.read().user;
+
+        if guilddata.bottle_channel.is_none() && is_new {
+            let general = guild.channels.iter()
+                .find(|&(channelid, _)| guild.permissions_in(channelid, user).send_messages());
+
+            if let Some((channel, _)) = general {
+                channel.send_message(|x|
+                    x.content(format!("Hey! If you want to receive and send bottles, please set the channel you want to receive them in with -bottles. Thanks!"))).ok();
+            }
+        }
+
+        guilddata.update(&conn).unwrap();
     }
 
-    fn guild_delete (&self, _ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
-        Guild::delete(incomplete.id.as_i64(), &self.db.get().unwrap()).unwrap();
+    fn guild_delete (&self, ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
+        Guild::delete(incomplete.id.as_i64(), &ctx.get_conn()).ok();
     }
 }
 
@@ -115,16 +160,38 @@ fn main() {
     let webdb = db.clone(); let webcfg = config.clone();
     thread::spawn( move || web::start_serv(webdb, webcfg));
 
-    let mut client = Client::new(&config.token, Handler {db: db.clone()}).expect("Error initializing client.");
+    let mut client = Client::new(&config.token, Handler).expect("Error initializing client.");
+    client.data.lock().insert::<DConn>(db.clone());
 
-    client.with_framework(
-        StandardFramework::new()
-            .configure(|c| c.prefix("-"))
-            .help(|f, msg, opts, cmds, args | {
-                msg.reply("DM me your message to send it in a bottle to random people in random discord! Administrators, go to the site to change the channel where reports go.")?;
+    client.with_framework(StandardFramework::new()
+        .configure(|c| c.prefix("-")) // set the bot's prefix to "~"
+        .help(|f, msg, opts, cmds, args | {
+              msg.reply ("Set a bottle channel with ``-configure``, then start sending out and replying to bottles there! Or dm me for anonymous bottles! :^)")?;
 
-                Ok(())
-            })
+              Ok(())
+        })
+        .command("configure", |c|
+            c.required_permissions(ADMIN_PERM)
+                .guild_only(true)
+                .exec(| ctx, msg, mut args: serenity::framework::standard::Args | {
+                    let chan = args.single::<serenity::model::channel::Channel>()
+                        .map_err(|_| "Please specify a valid channel.")?;
+
+                    let conn = ctx.get_conn();
+
+                    let mut guild = Guild::get(msg.guild_id.unwrap().as_i64(), &conn);
+                    guild.bottle_channel = Some(chan.id().as_i64());
+                    guild.update(&conn)?;
+
+                    msg.reply("All set!")?;
+                    Ok (())
+                })
+        )
+        .after(| ctx, msg, _, res | {
+            if let Err(CommandError(str)) = res {
+                msg.reply(&str).ok();
+            }
+        })
     );
 
     client.start_autosharded().unwrap();

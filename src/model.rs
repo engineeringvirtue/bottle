@@ -1,15 +1,19 @@
 use std;
+use serenity;
+use typemap::Key;
 use chrono;
+pub use std::error::Error;
+use uuid::Uuid;
 use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use r2d2::{Pool, PooledConnection};
 
 use super::schema::*;
 
+pub const REPLY_PREFIX: &str = "->";
 pub const PUSHXP: i32 = 120;
 pub const REPLYXP: i32 = 75;
-pub const COOLDOWN: i32 = 100;
-pub const DELETETIMEOUT: i32 = 720;
+pub const COOLDOWN: i64 = 45;
 
 pub type ConnPool = Pool<ConnectionManager<PgConnection>>;
 pub type Conn = PooledConnection<ConnectionManager<PgConnection>>;
@@ -30,11 +34,24 @@ pub struct MakeBottle {
     pub reply_to: Option<BottleId>,
 
     pub time_pushed: DTime,
-    pub contents: String
+    pub contents: String,
+    pub url: Option<String>,
+    pub image: Option<String>
 }
 
-#[derive(Queryable, Identifiable)]
+#[derive(Queryable, Insertable, AsChangeset, Identifiable)]
+#[table_name="user"]
+pub struct User {
+    pub id: UserId,
+    pub session: Option<Uuid>,
+    pub token: Option<String>,
+    pub xp: i32,
+    pub admin: bool
+}
+
+#[derive(Queryable, Associations, Identifiable)]
 #[table_name="bottle"]
+#[belongs_to(User, foreign_key="user")]
 pub struct Bottle {
     pub id: BottleId,
     pub reply_to: Option<BottleId>,
@@ -44,17 +61,9 @@ pub struct Bottle {
     pub guild: Option<GuildId>,
     pub time_pushed: DTime,
 
-    pub contents: String
-}
-
-#[derive(Queryable, Insertable, AsChangeset, Identifiable)]
-#[table_name="user"]
-pub struct User {
-    pub id: UserId,
-    pub subscribed: bool,
-    pub token: Option<String>,
-    pub xp: i32,
-    pub admin: bool
+    pub contents: String,
+    pub url: Option<String>,
+    pub image: Option<String>
 }
 
 #[derive(Queryable, Insertable, AsChangeset, Identifiable)]
@@ -76,7 +85,8 @@ impl Guild {
 pub struct MakeGuildBottle {
     pub bottle: BottleId,
     pub guild: GuildId,
-    pub message: i64
+    pub message: i64,
+    pub time_recieved: DTime
 }
 
 #[derive(Queryable, Associations, Identifiable)]
@@ -92,7 +102,7 @@ pub struct GuildBottle {
 
 impl User {
     pub fn new (uid: UserId) -> User {
-        User {id: uid, subscribed: true, token: None, xp: 0, admin: false}
+        User {id: uid, session: None, token: None, xp: 0, admin: false}
     }
 }
 
@@ -113,10 +123,37 @@ pub struct Ban {
 #[derive(Clone)]
 pub struct Config {pub token:String, pub client_id: String, pub client_secret: String, pub database_path:String}
 
-pub type Res<A> = Result<A, Box<std::error::Error>>;
+pub type Res<A> = Result<A, Box<Error>>;
 
 pub fn now() -> chrono::NaiveDateTime {
     chrono::offset::Utc::now().naive_utc()
+}
+
+pub struct DConn;
+impl Key for DConn {
+    type Value = ConnPool;
+}
+
+pub trait GetConnection { fn get_conn(&self) -> Conn; fn get_pool(&self) -> ConnPool; }
+
+impl GetConnection for Pool<ConnectionManager<PgConnection>> {
+    fn get_conn(&self) -> Conn {
+        self.get().unwrap()
+    }
+
+    fn get_pool(&self) -> ConnPool {
+        self.clone()
+    }
+}
+
+impl GetConnection for serenity::prelude::Context {
+    fn get_conn(&self) -> Conn {
+        self.get_pool().get_conn()
+    }
+
+    fn get_pool(&self) -> ConnPool {
+        self.data.lock().get::<DConn>().unwrap().get_pool()
+    }
 }
 
 pub mod id {

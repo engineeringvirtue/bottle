@@ -14,6 +14,8 @@ table! {
         guild -> Nullable<Int8>,
         time_pushed -> Timestamp,
         contents -> Text,
+        url -> Nullable<Text>,
+        image -> Nullable<Text>,
     }
 }
 
@@ -45,7 +47,7 @@ table! {
 table! {
     user (id) {
         id -> Int8,
-        subscribed -> Bool,
+        session -> Nullable<Uuid>,
         token -> Nullable<Text>,
         xp -> Int4,
         admin -> Bool,

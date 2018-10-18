@@ -1,11 +1,29 @@
 use oauth2;
-use nickel::{Nickel, StaticFilesHandler, HttpRouter};
+use nickel;
+use nickel::{Nickel, StaticFilesHandler, Request, Response, MiddlewareResult, Action, NickelError, FaviconHandler, HttpRouter};
 use nickel::extensions::{Redirect};
+use nickel::hyper::net::Fresh;
+use nickel::status::StatusCode;
+use std::io::Write;
 
 use std::collections::HashMap;
 
 use model::*;
 use data::*;
+//
+//struct ErrorHandler;
+//impl<D> nickel::ErrorHandler<D> for ErrorHandler {
+//    fn handle_error(&self, err: &mut NickelError<D>, req: &mut Request<D>) -> Action {
+//        if let Some(ref mut res) = err.stream {
+//            if res.status() == StatusCode::NotFound {
+//                let _ = res.render("res/404.html", &HashMap::new());
+//                return nickel::Halt(())
+//            }
+//        }
+//
+//        nickel::Continue(())
+//    }
+//}
 
 pub fn start_serv (db: ConnPool, cfg: Config) {
     let oauthcfg = oauth2::Config::new(
@@ -14,7 +32,9 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
 
     let mut serv = Nickel::new();
 
-    serv.utilize(StaticFilesHandler::new("/res"));
+    serv.utilize(FaviconHandler::new("./assets/icon_transparent.png"));
+    serv.utilize(StaticFilesHandler::new("./res/img"));
+    serv.utilize(StaticFilesHandler::new("./res/style"));
 
     serv.get("/auth/redirect", middleware! { |req, res|
         "wuht"
@@ -25,7 +45,7 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
     });
 
     serv.get("/", middleware! { |req, res|
-        let conn:Conn = db.get().unwrap();
+        let conn:&Conn = &db.get_conn();
 
         let mut data = HashMap::new();
         data.insert("bottlecount", get_bottle_count(&conn).unwrap());
@@ -34,6 +54,12 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
 
         return res.render("res/home.html", &data);
     });
+
+    serv.get("/**", middleware! { |req, res|
+        return res.render("res/404.html", &HashMap::<String, String>::new());
+    });
+
+//    serv.handle_error(ErrorHandler);
 
     serv.listen("127.0.0.1:8080").unwrap();
 }
