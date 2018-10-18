@@ -69,11 +69,11 @@ impl EventHandler for Handler {
                     let msgid = new_message.id.as_i64();
 
                     let mut user = User::get(userid, &conn);
-                    match user.get_last_bottle(&conn) {
-                        Ok(ref bottle) if now().signed_duration_since(bottle.time_pushed) < Duration::minutes(COOLDOWN) && !user.admin => {
+                    match user.get_last_bottles(1, &conn).ok().and_then(|bottles| bottles.first()) {
+                        Some (ref bottle) if now().signed_duration_since(bottle.time_pushed) < Duration::minutes(COOLDOWN) && !user.admin => {
                             return Err("You must wait 45 minutes before sending another bottle!".into())
                         },
-                        _ => ()
+                        None => ()
                     }
 
                     let mut contents = new_message.content.clone();
@@ -128,13 +128,13 @@ impl EventHandler for Handler {
         let guilddata = Guild::get(guild.id.as_i64(), &conn);
         let user = &cache.read().user;
 
-        if guilddata.bottle_channel.is_none() && is_new {
+        if is_new {
             let general = guild.channels.iter()
                 .find(|&(channelid, _)| guild.permissions_in(channelid, user).send_messages());
 
             if let Some((channel, _)) = general {
                 channel.send_message(|x|
-                    x.content(format!("Hey! If you want to receive and send bottles, please set the channel you want to receive them in with -bottles. Thanks!"))).ok();
+                    x.content(format!("Hey! If you want to receive and send bottles, please set the channel you want to receive them in with ``-configure``. Thanks!"))).ok();
             }
         }
 

@@ -10,20 +10,6 @@ use std::collections::HashMap;
 
 use model::*;
 use data::*;
-//
-//struct ErrorHandler;
-//impl<D> nickel::ErrorHandler<D> for ErrorHandler {
-//    fn handle_error(&self, err: &mut NickelError<D>, req: &mut Request<D>) -> Action {
-//        if let Some(ref mut res) = err.stream {
-//            if res.status() == StatusCode::NotFound {
-//                let _ = res.render("res/404.html", &HashMap::new());
-//                return nickel::Halt(())
-//            }
-//        }
-//
-//        nickel::Continue(())
-//    }
-//}
 
 pub fn start_serv (db: ConnPool, cfg: Config) {
     let oauthcfg = oauth2::Config::new(
@@ -36,13 +22,15 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
     serv.utilize(StaticFilesHandler::new("./res/img"));
     serv.utilize(StaticFilesHandler::new("./res/style"));
 
-    serv.get("/auth/redirect", middleware! { |req, res|
-        "wuht"
-    });
-
-    serv.get("/auth", middleware! { |req, res|
-        return res.redirect(oauthcfg.authorize_url().into_string());
-    });
+//    serv.get("/user/:uid", |req, res| {
+//        let uid = req.param("uid")?;
+//
+//        let conn = &db.get_conn();
+//        let u = User::get(uid, conn);
+//        let bottles = u.get_last_bottles(5, conn);
+//
+//
+//    });
 
     serv.get("/", middleware! { |req, res|
         let conn:&Conn = &db.get_conn();
@@ -58,8 +46,6 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
     serv.get("/**", middleware! { |req, res|
         return res.render("res/404.html", &HashMap::<String, String>::new());
     });
-
-//    serv.handle_error(ErrorHandler);
 
     serv.listen("127.0.0.1:8080").unwrap();
 }

@@ -91,23 +91,13 @@ pub fn distribute_bottle (bottle: MakeBottle, conn:&Conn) -> Res<()> {
     query.filter(guild::bottle_channel.is_not_null()).order(random).first(conn)
         .map_err(|err| -> Box<Error> { err.into() })
         .and_then(|guild: Guild| -> Res<()> {
-        let mut bottles: Vec<Bottle> = Vec::new();
+            let mut bottles = bottle.get_reply_list(conn)?;
+            bottles.insert(0, bottle);
 
-        while bottles.len() < 25 {
-            match bottles.last().unwrap_or(&bottle).reply_to {
-                Some(x) => {
-                    bottles.push(Bottle::get(x, conn)?);
-                },
-                None => break
-            }
-        }
+            distribute_to_guild(&bottles, guild, conn)?;
 
-        bottles.insert(0, bottle);
-
-        distribute_to_guild(&bottles, guild, conn)?;
-
-        Ok(())
-    }).ok();
+            Ok(())
+        }).ok();
 
     Ok(())
 }

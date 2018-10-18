@@ -52,6 +52,7 @@ pub struct User {
 #[derive(Queryable, Associations, Identifiable)]
 #[table_name="bottle"]
 #[belongs_to(User, foreign_key="user")]
+#[belongs_to(Bottle, foreign_key="reply_to")]
 pub struct Bottle {
     pub id: BottleId,
     pub reply_to: Option<BottleId>,
