@@ -3,55 +3,12 @@ use model::*;
 use diesel::prelude::*;
 use schema::*;
 use diesel::*;
+use diesel::dsl::{sql, count_star};
 
 type Res<A> = Result<A, result::Error>;
 
 pub mod functions {
     use diesel::sql_types::*;
-    use diesel::query_source::*;
-    use diesel::query_builder::*;
-    use diesel::result::QueryResult;
-    use diesel::pg::Pg;
-
-    pub struct Ranking<A, B> {
-        compare_col: A,
-        source: B
-    }
-
-    impl<A, B> QueryFragment<Pg> for Ranking<A,B> where A: QueryFragment<Pg>, B: QueryFragment<Pg> {
-        fn walk_ast(&self, mut out: AstPass<Pg>) -> QueryResult<()> {
-//            SELECT COUNT(*)
-//            FROM "user" as compare
-//            WHERE compare.xp > "user".xp
-//            ) AS Ranking
-
-            out.push_sql("1 + (SELECT COUNT(*) FROM ");
-            self.source.walk_ast(out.reborrow())?;
-            out.push_sql(" AS compare WHERE compare.");
-            self.compare_col.walk_ast(out.reborrow())?;
-            out.push_sql(" > ");
-            self.source.walk_ast(out.reborrow())?;
-            out.push_sql(".");
-            self.compare_col.walk_ast(out.reborrow())?;
-            out.push_sql(") AS Ranking");
-
-            Ok(())
-        }
-    }
-
-    impl_query_id!(Ranking<A, B>);
-
-    impl<A, B> diesel::expression::Expression for Ranking<A, B> {
-        type SqlType = BigInt;
-    }
-
-    impl_selectable_expression!(Ranking<A, B>);
-
-    impl<A, B> Ranking<A, B> where A: QueryFragment<Pg>, B: QueryFragment<Pg> {
-        pub fn new<C, D> (compare_col: C, source: D) -> Ranking<C::Query, D::Query> where C: AsQuery + Sized, D: AsQuery + Sized {
-            Ranking { compare_col: compare_col.as_query(), source: source.as_query() }
-        }
-    }
 
     no_arg_sql_function!(random, (), "Represents the postgresql random() function");
     sql_function!(estimate_rows, Estimate, (tablename: Text) -> Int8);
@@ -72,8 +29,14 @@ impl User {
         Bottle::belonging_to(self).order(bottle::time_pushed.desc()).limit(limit).load(conn)
     }
 
+    pub fn get_num_bottles(&self, conn:&Conn) -> Res<i64> {
+        Bottle::belonging_to(self).select(dsl::count_star()).first(conn)
+    }
+
     pub fn get_ranking(&self, conn:&Conn) -> Res<i64> {
-        user::table.select(Ranking::new(user::xp, user::table)).find(self.id).first(conn)
+        user::table.select(sql(
+            "1 + (SELECT COUNT(*) FROM \"user\" as compare WHERE compare.xp > \"user\".xp) AS Ranking)"
+        )).find(self.id).first(conn)
     }
 }
 //

@@ -7,13 +7,18 @@ extern crate r2d2;
 extern crate uuid;
 #[macro_use]
 extern crate diesel;
-extern crate dotenv;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate kankyo;
+extern crate envy;
 extern crate typemap;
 #[macro_use]
 extern crate serenity;
 extern crate json;
-#[macro_use]
-extern crate nickel;
+
+extern crate sapper;
+
 extern crate oauth2;
 
 pub mod schema;
@@ -24,7 +29,7 @@ pub mod web;
 pub mod bottle;
 
 use std::thread;
-use std::fs::read_to_string;
+use std::fs::File;
 use std::sync::{Arc};
 use time::Duration;
 use diesel::pg::PgConnection;
@@ -69,11 +74,12 @@ impl EventHandler for Handler {
                     let msgid = new_message.id.as_i64();
 
                     let mut user = User::get(userid, &conn);
-                    match user.get_last_bottles(1, &conn).ok().and_then(|bottles| bottles.first()) {
+                    let lastbottle = user.get_last_bottles(1, &conn).ok().and_then(|bottles| bottles.into_iter().next());
+                    match lastbottle {
                         Some (ref bottle) if now().signed_duration_since(bottle.time_pushed) < Duration::minutes(COOLDOWN) && !user.admin => {
-                            return Err("You must wait 45 minutes before sending another bottle!".into())
+                            return Err("You must wait 45 minutes before sending another bottle!".into()) //TODO: specify duration
                         },
-                        None => ()
+                        _ => ()
                     }
 
                     let mut contents = new_message.content.clone();
@@ -146,15 +152,10 @@ impl EventHandler for Handler {
     }
 }
 
-fn get_config (path: String) -> Result<Config, Box<std::error::Error>> {
-    let cfgstr = read_to_string(path)?;
-    let cfg = json::parse(&cfgstr)?;
-    Ok (Config {token: cfg["token"].as_str().ok_or("Token not found!")?.to_string(), client_id: cfg["client_id"].as_str().ok_or("Client id not found!")?.to_string(), client_secret: cfg["client_secret"].as_str().ok_or("Client secret not found!")?.to_string(), database_path: cfg["database-path"].as_str().ok_or("Database path not found!")?.to_string()})
-}
-
 fn main() {
-    let config = get_config("config.json".to_owned()).unwrap();
-    let manager = ConnectionManager::<PgConnection>::new(config.clone().database_path);
+    kankyo::load_from_reader(&mut File::open("./.env").unwrap()).unwrap();
+    let config:Config = envy::from_env::<Config>().unwrap();
+    let manager = ConnectionManager::<PgConnection>::new(config.clone().database_url);
     let db = r2d2::Pool::builder().build(manager).expect("Error initializing connection pool.");
 
     let webdb = db.clone(); let webcfg = config.clone();

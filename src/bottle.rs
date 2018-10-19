@@ -1,9 +1,9 @@
 use std::thread;
 use chrono::{DateTime, Utc};
 use serenity::prelude::*;
-use serenity::http::raw::get_user;
-use serenity::model::id::ChannelId;
+use serenity::model::id::{ChannelId, UserId, GuildId};
 use serenity::model::channel::Message;
+use serenity::CACHE;
 use diesel::prelude::*;
 use diesel::expression::Expression;
 use serenity::utils::Colour;
@@ -28,10 +28,6 @@ pub fn level_to_col (lvl: usize) -> Colour {
     }
 }
 
-//sorry github
-const ERROR_AVATAR: &str = "https://github.com/engineeringvirtue/bottled-discord/blob/master/assets/fetcherror.png?raw=true";
-const ANONYMOUS_AVATAR: &str = "https://github.com/engineeringvirtue/bottled-discord/blob/master/assets/anonymous.png?raw=true";
-
 pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId) -> Res<Message> {
     let msg = channel.send_message(|x| x.embed(|e| {
         let title = if level > 0 { "You have found a message glued to the bottle!" } else { "You have recovered a bottle!" }; //TODO: better reply system, takes last bottle as an argument
@@ -40,9 +36,21 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId) -> Res<
             .description(bottle.contents.clone())
             .timestamp(&DateTime::<Utc>::from_utc(bottle.time_pushed, Utc))
             .color(level_to_col(level))
+            .footer(|footer|
+                if let Some(ref guild) = bottle.guild.and_then(|guild| GuildId(guild as u64).to_partial_guild().ok()) {
+                    let mut f = footer.text(&guild.name);
+                    if let Some(ref icon) = guild.icon {
+                        f = f.icon_url(&icon);
+                    }
+
+                    f
+                } else {
+                    footer.text("No guild found")
+                }
+            )
             .author(|author| {
                 if bottle.guild.is_some() {
-                    let user = get_user(bottle.user as u64);
+                    let user = UserId(bottle.user as u64).to_user();
                     let username = user.as_ref().map(|u| u.tag())
                         .unwrap_or("Error fetching username".to_owned());
 

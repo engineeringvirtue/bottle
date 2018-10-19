@@ -15,6 +15,10 @@ pub const PUSHXP: i32 = 120;
 pub const REPLYXP: i32 = 75;
 pub const COOLDOWN: i64 = 45;
 
+//sorry github
+pub const ERROR_AVATAR: &str = "https://github.com/engineeringvirtue/bottled-discord/blob/master/assets/fetcherror.png?raw=true";
+pub const ANONYMOUS_AVATAR: &str = "https://github.com/engineeringvirtue/bottled-discord/blob/master/assets/anonymous.png?raw=true";
+
 pub type ConnPool = Pool<ConnectionManager<PgConnection>>;
 pub type Conn = PooledConnection<ConnectionManager<PgConnection>>;
 pub type DTime = chrono::NaiveDateTime;
@@ -121,8 +125,8 @@ pub struct Ban {
     pub user: UserId
 }
 
-#[derive(Clone)]
-pub struct Config {pub token:String, pub client_id: String, pub client_secret: String, pub database_path:String}
+#[derive(Clone, Deserialize, Debug)]
+pub struct Config {pub token: String, pub client_id: String, pub client_secret: String, pub database_url: String, pub host_path: String, pub admin_channel: i64, pub auto_admin: UserId, pub debug: bool}
 
 pub type Res<A> = Result<A, Box<Error>>;
 
@@ -135,7 +139,13 @@ impl Key for DConn {
     type Value = ConnPool;
 }
 
-pub trait GetConnection { fn get_conn(&self) -> Conn; fn get_pool(&self) -> ConnPool; }
+pub trait GetConnection {
+    fn get_conn(&self) -> Conn {
+        self.get_pool().get_conn()
+    }
+
+    fn get_pool(&self) -> ConnPool;
+}
 
 impl GetConnection for Pool<ConnectionManager<PgConnection>> {
     fn get_conn(&self) -> Conn {
@@ -148,10 +158,6 @@ impl GetConnection for Pool<ConnectionManager<PgConnection>> {
 }
 
 impl GetConnection for serenity::prelude::Context {
-    fn get_conn(&self) -> Conn {
-        self.get_pool().get_conn()
-    }
-
     fn get_pool(&self) -> ConnPool {
         self.data.lock().get::<DConn>().unwrap().get_pool()
     }
