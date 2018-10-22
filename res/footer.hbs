@@ -1,0 +1,10 @@
+<div class="footer">
+    <script language="JavaScript">
+        function y2k(number) {
+            return (number < 1000) ? number + 1900 : number;
+        }
+        var today = new Date();
+        var year = y2k(today.getYear());
+        document.write('&copy; ' + year + ' EngineeringVirtue&trade; - All Rights Reserved');
+    </script>
+</div>

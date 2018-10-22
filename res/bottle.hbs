@@ -1,0 +1,13 @@
+<div class="bottle" >
+    <div class="reply_to" >
+        {{#reply_to}}
+            {{>bottle}}
+        {{/reply_to}}
+    </div>
+
+    <div class="bottle main" >
+        <span class="bottle user" > {{ user }} </span>
+        <p class="bottle content" >{{ content }}</p>
+        <span class="bottle time" >{{ time_pushed }}</span>
+    </div>
+</div>

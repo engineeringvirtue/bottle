@@ -3,7 +3,8 @@ use model::*;
 use diesel::prelude::*;
 use schema::*;
 use diesel::*;
-use diesel::dsl::{sql, count_star};
+use diesel::dsl::sql;
+use uuid::Uuid;
 
 type Res<A> = Result<A, result::Error>;
 
@@ -35,11 +36,19 @@ impl User {
 
     pub fn get_ranking(&self, conn:&Conn) -> Res<i64> {
         user::table.select(sql(
-            "1 + (SELECT COUNT(*) FROM \"user\" as compare WHERE compare.xp > \"user\".xp) AS Ranking)"
+            "1 + (SELECT COUNT(*) FROM \"user\" as compare WHERE compare.xp > \"user\".xp) AS Ranking"
         )).find(self.id).first(conn)
     }
+
+    pub fn get_banned(&self, conn:&Conn) -> Res<bool> {
+        select(dsl::exists(ban::table.find(self.id))).get_result(conn)
+    }
+
+    pub fn from_ses(ses:Uuid, conn:&Conn) -> Res<Self> {
+        user::table.filter(user::session.eq(ses)).first(conn)
+    }
 }
-//
+
 impl Guild {
     pub fn get(gid: GuildId, conn:&Conn) -> Self {
         guild::table.find(gid).first(conn).unwrap_or_else(|_| Guild::new(gid))
@@ -57,7 +66,7 @@ impl Guild {
         delete(guild::table).filter(guild::id.eq(gid)).execute(conn)
     }
 }
-//
+
 impl MakeBottle {
     pub fn make(&self, conn:&Conn) -> Res<Bottle> {
         insert_into(bottle::table).values(self).get_result(conn)
@@ -109,19 +118,29 @@ impl GuildBottle {
     }
 }
 
-//impl Report {
-//    fn make(&self, conn:&Conn) -> Res<ReportId> {
-//
-//    }
-//
-//    fn get_from_message(mid:i64, conn:&Conn) -> Res<(ReportId, Self)> {
-//
-//    }
-//
-//    fn del(rid:ReportId) -> Res<()> {
-//
-//    }
-//}
+impl Report {
+    pub fn make(&self, conn:&Conn) -> Res<Self> {
+        insert_into(report::table).values(self).get_result(conn)
+    }
+
+    pub fn get_from_message(mid:i64, conn:&Conn) -> Res<Self> {
+        report::table.filter(report::message.eq(mid)).first(conn)
+    }
+
+    pub fn del(&self, conn:&Conn) -> Res<usize> {
+        delete(report::table.find(self.bottle)).execute(conn)
+    }
+}
+
+impl Ban {
+    pub fn make(&self, conn:&Conn) -> Res<Self> {
+        insert_into(ban::table).values(self).get_result(conn)
+    }
+
+    pub fn del(&self, conn:&Conn) -> Res<usize> {
+        delete(ban::table.find(self.user)).execute(conn)
+    }
+}
 
 pub fn get_bottle_count (conn: &Conn) -> Res<i64> {
     select(estimate_rows("bottle".to_owned())).get_result(conn)

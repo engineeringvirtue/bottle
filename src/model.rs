@@ -2,6 +2,7 @@ use std;
 use serenity;
 use typemap::Key;
 use chrono;
+use oauth2;
 pub use std::error::Error;
 use uuid::Uuid;
 use diesel::prelude::*;
@@ -13,6 +14,8 @@ use super::schema::*;
 pub const REPLY_PREFIX: &str = "->";
 pub const PUSHXP: i32 = 120;
 pub const REPLYXP: i32 = 75;
+pub const URLXP: i32 = 80;
+pub const IMAGEXP: i32 = 45;
 pub const COOLDOWN: i64 = 45;
 
 //sorry github
@@ -48,7 +51,6 @@ pub struct MakeBottle {
 pub struct User {
     pub id: UserId,
     pub session: Option<Uuid>,
-    pub token: Option<String>,
     pub xp: i32,
     pub admin: bool
 }
@@ -107,7 +109,7 @@ pub struct GuildBottle {
 
 impl User {
     pub fn new (uid: UserId) -> User {
-        User {id: uid, session: None, token: None, xp: 0, admin: false}
+        User {id: uid, session: None, xp: 0, admin: false}
     }
 }
 
@@ -115,6 +117,7 @@ impl User {
 #[table_name="report"]
 pub struct Report {
     pub bottle: BottleId,
+    pub message: i64,
     pub user: UserId
 }
 
@@ -126,12 +129,42 @@ pub struct Ban {
 }
 
 #[derive(Clone, Deserialize, Debug)]
-pub struct Config {pub token: String, pub client_id: String, pub client_secret: String, pub database_url: String, pub host_path: String, pub admin_channel: i64, pub auto_admin: UserId, pub debug: bool}
+pub struct Config {
+    pub token: String,
+    pub client_id: String,
+    pub client_secret: String,
+    pub database_url: String,
+    pub host_url: String,
+    pub admin_channel: i64,
+    pub auto_admin: UserId,
+    pub debug: bool,
+    pub cookie_sig: String
+}
 
 pub type Res<A> = Result<A, Box<Error>>;
 
 pub fn now() -> chrono::NaiveDateTime {
     chrono::offset::Utc::now().naive_utc()
+}
+
+pub struct DConfig;
+impl Key for DConfig {
+    type Value = Config;
+}
+
+pub struct DOauth2;
+impl Key for DOauth2 {
+    type Value = oauth2::Config;
+}
+
+pub trait GetConfig {
+    fn get_cfg(&self) -> Config;
+}
+
+impl GetConfig for serenity::prelude::Context {
+    fn get_cfg(&self) -> Config {
+        self.data.lock().get::<DConfig>().unwrap().clone()
+    }
 }
 
 pub struct DConn;

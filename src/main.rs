@@ -1,6 +1,4 @@
-#![feature(try_blocks)]
 #![allow(proc_macro_derive_resolution_fallback)]
-
 extern crate time;
 extern crate chrono;
 extern crate r2d2;
@@ -8,6 +6,7 @@ extern crate uuid;
 #[macro_use]
 extern crate diesel;
 extern crate serde;
+extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 extern crate kankyo;
@@ -15,11 +14,17 @@ extern crate envy;
 extern crate typemap;
 #[macro_use]
 extern crate serenity;
-extern crate json;
 
-extern crate sapper;
-
+extern crate iron;
+extern crate handlebars_iron;
+extern crate staticfile;
+extern crate mount;
+extern crate router;
+extern crate params;
 extern crate oauth2;
+extern crate http_req;
+extern crate bincode;
+extern crate iron_sessionstorage_0_6;
 
 pub mod schema;
 pub mod data;
@@ -58,12 +63,6 @@ fn handle_ev_err<F: Fn() -> Res<String>> (replymsg: &Message, handler: F) {
 
 struct Handler;
 impl EventHandler for Handler {
-    fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
-        ctx.set_presence(Some(gateway::Game {kind: gateway::GameType::Listening, name: "you, try -help".to_owned(), url: None})
-                         , serenity::model::user::OnlineStatus::DoNotDisturb);
-        println!("Ready!");
-    }
-
     fn message(&self, ctx: Context, new_message: Message) {
         if !new_message.author.bot {
             let conn = ctx.get_conn();
@@ -72,14 +71,24 @@ impl EventHandler for Handler {
                 handle_ev_err(&new_message, || {
                     let userid = new_message.author.id.as_i64();
                     let msgid = new_message.id.as_i64();
+                    let cfg = ctx.get_cfg();
 
                     let mut user = User::get(userid, &conn);
                     let lastbottle = user.get_last_bottles(1, &conn).ok().and_then(|bottles| bottles.into_iter().next());
                     match lastbottle {
-                        Some (ref bottle) if now().signed_duration_since(bottle.time_pushed) < Duration::minutes(COOLDOWN) && !user.admin => {
-                            return Err("You must wait 45 minutes before sending another bottle!".into()) //TODO: specify duration
+                        Some (ref bottle) => {
+                            let since_push = now().signed_duration_since(bottle.time_pushed);
+                            let cooldown = Duration::minutes(COOLDOWN);
+                            if since_push < cooldown && !user.admin {
+                                let towait = cooldown - since_push;
+                                return Err(format!("You must wait {} minutes before sending another bottle!", towait.num_minutes()).into())
+                            }
                         },
                         _ => ()
+                    }
+
+                    if user.get_banned(&conn)? {
+                        return Err("You are banned from using BottledDiscord! Appeal by dming the global admins!".into());
                     }
 
                     let mut contents = new_message.content.clone();
@@ -95,12 +104,20 @@ impl EventHandler for Handler {
                     let image = new_message.attachments.get(0).and_then(|a: &Attachment| a.dimensions().map(|_| a.url.clone()));
 
                     user.xp += match replyto {Some(_) => REPLYXP, None => PUSHXP};
+
+                    if let Some (_) = url {
+                        user.xp += URLXP;
+                    }
+                    if let Some (_) = image {
+                        user.xp += IMAGEXP;
+                    }
+
                     user.update(&conn)?;
 
                     let bottle = MakeBottle { message: msgid, reply_to: replyto, guild, user: user.id, time_pushed: now(), contents, url, image };
                     let connpool = ctx.get_pool();
                     thread::spawn(move || {
-                        bottle::distribute_bottle(bottle, &connpool.get_conn()).ok();
+                        bottle::distribute_bottle(bottle, &connpool.get_conn(), &cfg).ok();
                     });
 
                     Ok("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned())
@@ -140,7 +157,7 @@ impl EventHandler for Handler {
 
             if let Some((channel, _)) = general {
                 channel.send_message(|x|
-                    x.content(format!("Hey! If you want to receive and send bottles, please set the channel you want to receive them in with ``-configure``. Thanks!"))).ok();
+                    x.content("Hey! If you want to receive and send bottles, please set the channel you want to receive them in with ``-configure``. Thanks!")).ok();
             }
         }
 
@@ -149,6 +166,18 @@ impl EventHandler for Handler {
 
     fn guild_delete (&self, ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
         Guild::delete(incomplete.id.as_i64(), &ctx.get_conn()).ok();
+    }
+
+    fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
+        ctx.set_presence(Some(gateway::Game {kind: gateway::GameType::Listening, name: "you, try -help".to_owned(), url: None})
+                         , serenity::model::user::OnlineStatus::DoNotDisturb);
+
+        let conn = &ctx.get_conn();
+        let mut u = User::get(ctx.get_cfg().auto_admin, conn);
+        u.admin = true;
+        u.update(conn).ok();
+
+        println!("Ready!");
     }
 }
 
@@ -163,6 +192,7 @@ fn main() {
 
     let mut client = Client::new(&config.token, Handler).expect("Error initializing client.");
     client.data.lock().insert::<DConn>(db.clone());
+    client.data.lock().insert::<DConfig>(config.clone());
 
     client.with_framework(StandardFramework::new()
         .configure(|c| c.prefix("-")) // set the bot's prefix to "~"

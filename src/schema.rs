@@ -40,6 +40,7 @@ table! {
 table! {
     report (bottle) {
         bottle -> Int8,
+        message -> Int8,
         user -> Int8,
     }
 }
@@ -48,7 +49,6 @@ table! {
     user (id) {
         id -> Int8,
         session -> Nullable<Uuid>,
-        token -> Nullable<Text>,
         xp -> Int4,
         admin -> Bool,
     }

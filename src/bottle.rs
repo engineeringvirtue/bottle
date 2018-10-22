@@ -28,7 +28,7 @@ pub fn level_to_col (lvl: usize) -> Colour {
     }
 }
 
-pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId) -> Res<Message> {
+pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Config) -> Res<Message> {
     let msg = channel.send_message(|x| x.embed(|e| {
         let title = if level > 0 { "You have found a message glued to the bottle!" } else { "You have recovered a bottle!" }; //TODO: better reply system, takes last bottle as an argument
 
@@ -36,10 +36,11 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId) -> Res<
             .description(bottle.contents.clone())
             .timestamp(&DateTime::<Utc>::from_utc(bottle.time_pushed, Utc))
             .color(level_to_col(level))
+            .field("Report", format!("NSFW content? ~~Politics?~~ You can report it here: http://{}/report/{}", cfg.host_url, bottle.id), false)
             .footer(|footer|
                 if let Some(ref guild) = bottle.guild.and_then(|guild| GuildId(guild as u64).to_partial_guild().ok()) {
                     let mut f = footer.text(&guild.name);
-                    if let Some(ref icon) = guild.icon {
+                    if let Some(ref icon) = guild.icon_url() {
                         f = f.icon_url(&icon);
                     }
 
@@ -76,18 +77,18 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId) -> Res<
     Ok(msg)
 }
 
-pub fn distribute_to_guild(bottles: &Vec<Bottle>, guild: Guild, conn: &Conn) -> Res<()> {
+pub fn distribute_to_guild(bottles: &Vec<Bottle>, guild: Guild, conn: &Conn, cfg:&Config) -> Res<()> {
     let bottlechannelid = ChannelId(guild.bottle_channel.ok_or("No bottle channel")? as u64);
 
     for (i, bottle) in bottles.iter().rev().enumerate() {
-        let msg = render_bottle(bottle, i, bottlechannelid)?;
+        let msg = render_bottle(bottle, i, bottlechannelid, cfg)?;
         MakeGuildBottle {bottle: bottle.id, guild: guild.id, message: msg.id.as_i64(), time_recieved: now()}.make(conn)?;
     }
 
     Ok (())
 }
 
-pub fn distribute_bottle (bottle: MakeBottle, conn:&Conn) -> Res<()> {
+pub fn distribute_bottle (bottle: MakeBottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottle = bottle.make(conn)?;
 
     let mut query = guild::table.into_boxed();
@@ -102,7 +103,7 @@ pub fn distribute_bottle (bottle: MakeBottle, conn:&Conn) -> Res<()> {
             let mut bottles = bottle.get_reply_list(conn)?;
             bottles.insert(0, bottle);
 
-            distribute_to_guild(&bottles, guild, conn)?;
+            distribute_to_guild(&bottles, guild, conn, cfg)?;
 
             Ok(())
         }).ok();

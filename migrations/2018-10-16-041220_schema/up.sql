@@ -31,7 +31,6 @@ CREATE TABLE "bottle" (
 CREATE TABLE "user" (
 	"id" bigint NOT NULL,
 	"session" UUID UNIQUE,
-	"token" TEXT,
 	"xp" integer NOT NULL DEFAULT '0',
 	"admin" bool NOT NULL DEFAULT 'false',
 	CONSTRAINT user_pk PRIMARY KEY ("id")
@@ -56,6 +55,7 @@ CREATE TABLE "guild_bottle" (
 
 CREATE TABLE "report" (
 	"bottle" bigserial NOT NULL,
+	"message" bigint NOT NULL UNIQUE,
 	"user" bigint NOT NULL,
 	CONSTRAINT report_pk PRIMARY KEY ("bottle")
 ) WITH (

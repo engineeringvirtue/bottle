@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Bottled Discord | {{ user }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/main.css">
+    <style>
+    </style>
+</head>
+
+<body>
+    <div class="header" ><img src="{{ pfp }}" class="pfp" /> <h1>{{ user }}</h1></div>
+    <div class="user-data" >
+        <div class="stats" >
+            <span class="stat" ><b>{{ xp }}</b> XP</span> <span class="stat" >Ranked <b>{{ ranked }}</b></span>
+            <br><span class="stat" ><b>{{ numbottles }}</b> bottles</span>
+        </div>
+
+        <div class="recent" >
+            {{#each bottles}}
+                {{>bottle}}
+            {{else}}
+                No recent bottles have been sent by this user!
+            {{/each}}
+        </div>
+    </div>
+    {{> footer}}
+</body>
+
+</html>
