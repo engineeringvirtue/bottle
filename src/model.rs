@@ -16,6 +16,7 @@ pub const PUSHXP: i32 = 120;
 pub const REPLYXP: i32 = 75;
 pub const URLXP: i32 = 80;
 pub const IMAGEXP: i32 = 45;
+pub const REPORTXP: i32 = 25;
 pub const COOLDOWN: i64 = 45;
 
 //sorry github
@@ -30,6 +31,7 @@ pub type BottleId = i64;
 pub type GuildId = i64;
 pub type UserId = i64;
 pub type GuildBottleId = i64;
+pub type ReportId = i64;
 
 #[derive(Insertable)]
 #[table_name="bottle"]
@@ -46,7 +48,7 @@ pub struct MakeBottle {
     pub image: Option<String>
 }
 
-#[derive(Queryable, Insertable, AsChangeset, Identifiable)]
+#[derive(Queryable, Insertable, AsChangeset, Identifiable, Debug)]
 #[table_name="user"]
 pub struct User {
     pub id: UserId,
@@ -55,7 +57,7 @@ pub struct User {
     pub admin: bool
 }
 
-#[derive(Queryable, Associations, Identifiable)]
+#[derive(Queryable, Associations, Identifiable, Clone)]
 #[table_name="bottle"]
 #[belongs_to(User, foreign_key="user")]
 #[belongs_to(Bottle, foreign_key="reply_to")]
@@ -124,7 +126,7 @@ pub struct Report {
 #[derive(Queryable, Insertable)]
 #[table_name="ban"]
 pub struct Ban {
-    pub report: BottleId,
+    pub report: Option<ReportId>,
     pub user: UserId
 }
 
@@ -136,6 +138,8 @@ pub struct Config {
     pub database_url: String,
     pub host_url: String,
     pub admin_channel: i64,
+    pub ban_emoji: u64,
+    pub delete_emoji: u64,
     pub auto_admin: UserId,
     pub debug: bool,
     pub cookie_sig: String
@@ -220,6 +224,12 @@ pub mod id {
     }
 
     impl AsI64 for MessageId {
+        fn as_i64(&self) -> i64 {
+            *self.as_u64() as i64
+        }
+    }
+
+    impl AsI64 for EmojiId {
         fn as_i64(&self) -> i64 {
             *self.as_u64() as i64
         }

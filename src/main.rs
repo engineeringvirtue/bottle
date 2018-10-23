@@ -22,7 +22,7 @@ extern crate mount;
 extern crate router;
 extern crate params;
 extern crate oauth2;
-extern crate http_req;
+extern crate reqwest;
 extern crate bincode;
 extern crate iron_sessionstorage_0_6;
 
@@ -42,7 +42,7 @@ use diesel::r2d2::ConnectionManager;
 
 use serenity::prelude::*;
 use serenity::framework::standard::{Args, CommandError, DispatchError, StandardFramework, HelpBehaviour, CommandOptions, help_commands};
-use serenity::model::channel::{Message, Channel, Embed, Attachment};
+use serenity::model::channel::{Message, Channel, Embed, Attachment, Reaction};
 use serenity::model::event::*;
 use serenity::model::gateway;
 use serenity::model::permissions::Permissions;
@@ -74,7 +74,7 @@ impl EventHandler for Handler {
                     let cfg = ctx.get_cfg();
 
                     let mut user = User::get(userid, &conn);
-                    let lastbottle = user.get_last_bottles(1, &conn).ok().and_then(|bottles| bottles.into_iter().next());
+                    let lastbottle = user.get_bottle(&conn).ok();
                     match lastbottle {
                         Some (ref bottle) => {
                             let since_push = now().signed_duration_since(bottle.time_pushed);
@@ -87,7 +87,7 @@ impl EventHandler for Handler {
                         _ => ()
                     }
 
-                    if user.get_banned(&conn)? {
+                    if !user.admin && user.get_banned(&conn)? {
                         return Err("You are banned from using BottledDiscord! Appeal by dming the global admins!".into());
                     }
 
@@ -140,6 +140,16 @@ impl EventHandler for Handler {
                 _ => ()
             };
         }
+    }
+
+    fn reaction_add(&self, ctx: Context, r: Reaction) {
+        let conn = &ctx.get_conn();
+        bottle::react(conn, r, true, ctx.get_cfg()).unwrap();
+    }
+
+    fn reaction_remove(&self, ctx: Context, r: Reaction) {
+        let conn = &ctx.get_conn();
+        bottle::react(conn, r, false, ctx.get_cfg()).unwrap();
     }
 
     fn message_update(&self, _ctx: Context, _new_data: MessageUpdateEvent) {
@@ -196,7 +206,7 @@ fn main() {
 
     client.with_framework(StandardFramework::new()
         .configure(|c| c.prefix("-")) // set the bot's prefix to "~"
-        .help(|f, msg, opts, cmds, args | {
+        .help(|_f, msg, _opts, _cmds, _args | {
               msg.reply ("Set a bottle channel with ``-configure``, then start sending out and replying to bottles there! Or dm me for anonymous bottles! :^)")?;
 
               Ok(())
@@ -218,7 +228,30 @@ fn main() {
                     Ok (())
                 })
         )
-        .after(| ctx, msg, _, res | {
+        .command("mote", |c|
+            c.exec(|ctx, msg, mut args| {
+                let usr = args.single::<serenity::model::user::User>()
+                    .map_err(|_| "Please specify a user to promote.")?;
+
+                if ctx.get_cfg().auto_admin == msg.author.id.as_i64() {
+                    let conn = &ctx.get_conn();
+                    let mut u = User::get(usr.id.as_i64(), conn);
+                    if !u.admin {
+                        u.admin = true;
+                        msg.reply(&format!("Promoted {}", usr.tag()))?;
+                    } else {
+                        u.admin = false;
+                        msg.reply(&format!("Demoted {}", usr.tag()))?;
+                    }
+
+                    u.update(conn)?;
+                    Ok(())
+                } else {
+                    Err("You must be an auto admin to do this!".into())
+                }
+            })
+        )
+        .after(| _ctx, msg, _, res | {
             if let Err(CommandError(str)) = res {
                 msg.reply(&str).ok();
             }

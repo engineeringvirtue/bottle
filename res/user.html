@@ -4,24 +4,94 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Bottled Discord | {{ user }}</title>
+    <title>Bottled Discord | {{ tag }}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="/main.css">
+    <link rel="stylesheet" href="/style/main.css">
+
     <style>
+        .header {
+            display: inline-flex;
+            flex-direction: row;
+            justify-content: space-around;
+            align-content: center;
+            align-items: center;
+            vertical-align: middle;
+            margin: 5% 0;
+        }
+
+        .header span {
+            margin: 0;
+        }
+
+        .header img {
+            height: 4em;
+            margin-right: 15px;
+        }
+
+        body {
+            text-align: center;
+        }
+
+        b {
+            color: white;
+        }
+
+        .data {
+            display: flex;
+            align-content: center;
+            justify-content: space-evenly;
+            margin-bottom: 10%;
+        }
+
+        .stats {
+            flex-shrink: 0;
+            margin: 7%;
+        }
+
+        .recent {
+            padding: 2%;
+            border-radius: 5px;
+            background-color: rgb(10, 11, 14)
+        }
+
+        .bottle {
+            padding: 2%;
+            margin: 1%;
+            background: #254565;
+        }
+
+        .bottle .main {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .bottle .content {
+            font-size: 1.2em;
+            color: white;
+        }
+
+        .bottle .time {
+            font-size: 0.5em;
+            color: gray;
+            position: relative;
+            right: 0;
+            bottom: 0;
+            padding: 10px;
+        }
     </style>
 </head>
 
 <body>
-    <div class="header" ><img src="{{ pfp }}" class="pfp" /> <h1>{{ user }}</h1></div>
-    <div class="user-data" >
+    <div class="header" ><img src="{{ pfp }}" class="pfp" /> <h1>{{ tag }}</h1></div>
+    <div class="data" >
         <div class="stats" >
-            <span class="stat" ><b>{{ xp }}</b> XP</span> <span class="stat" >Ranked <b>{{ ranked }}</b></span>
-            <br><span class="stat" ><b>{{ numbottles }}</b> bottles</span>
+            <span class="stat" ><b>{{ xp }}</b> XP</span> <span class="stat" >, ranked #<b>{{ ranked }}</b></span>
+            <br><span class="stat" ><b>{{ num_bottles }}</b> bottles</span>
         </div>
 
         <div class="recent" >
-            {{#each bottles}}
-                {{>bottle}}
+            {{#each recent_bottles}}
+                {{> bottle}}
             {{else}}
                 No recent bottles have been sent by this user!
             {{/each}}

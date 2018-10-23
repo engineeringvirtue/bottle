@@ -27,7 +27,11 @@ impl User {
     }
 
     pub fn get_last_bottles(&self, limit:i64, conn:&Conn) -> Res<Vec<Bottle>> {
-        Bottle::belonging_to(self).order(bottle::time_pushed.desc()).limit(limit).load(conn)
+        Bottle::belonging_to(self).filter(bottle::guild.is_not_null()).filter(bottle::reply_to.is_null()).order(bottle::time_pushed.desc()).limit(limit).load(conn)
+    }
+
+    pub fn get_bottle(&self, conn:&Conn) -> Res<Bottle> {
+        Bottle::belonging_to(self).order(bottle::time_pushed.desc()).limit(1).first(conn)
     }
 
     pub fn get_num_bottles(&self, conn:&Conn) -> Res<i64> {
@@ -44,7 +48,7 @@ impl User {
         select(dsl::exists(ban::table.find(self.id))).get_result(conn)
     }
 
-    pub fn from_ses(ses:Uuid, conn:&Conn) -> Res<Self> {
+    pub fn from_session(ses:Uuid, conn:&Conn) -> Res<Self> {
         user::table.filter(user::session.eq(ses)).first(conn)
     }
 }
@@ -78,7 +82,7 @@ impl Bottle {
         bottle::table.find(id).get_result(conn)
     }
 
-    pub fn delete(id:BottleId, conn:&Conn) -> Res<usize> {
+    pub fn del(id:BottleId, conn:&Conn) -> Res<usize> {
         delete(bottle::table).filter(bottle::id.eq(id)).execute(conn)
     }
 
@@ -94,6 +98,7 @@ impl Bottle {
             }
         }
 
+        bottles.insert(0, self.clone());
         Ok(bottles)
     }
 }
@@ -109,12 +114,16 @@ impl GuildBottle {
         guild_bottle::table.find(buid).get_result(conn)
     }
 
+    pub fn get_from_bottle(bid: BottleId, conn:&Conn) -> Res<Vec<Self>> {
+        guild_bottle::table.filter(guild_bottle::bottle.eq(bid)).load(conn)
+    }
+
     pub fn get_from_message(mid:i64, conn:&Conn) -> Res<Self> {
         guild_bottle::table.filter(guild_bottle::message.eq(mid)).get_result(conn)
     }
 
-    pub fn delete(buid:GuildBottleId, conn:&Conn) -> Res<usize> {
-        delete(guild_bottle::table.find(buid)).execute(conn)
+    pub fn del(&self, conn:&Conn) -> Res<usize> {
+        delete(guild_bottle::table.find(self.id)).execute(conn)
     }
 }
 

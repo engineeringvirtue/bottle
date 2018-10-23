@@ -1,6 +1,6 @@
 table! {
     ban (user) {
-        report -> Int8,
+        report -> Nullable<Int8>,
         user -> Int8,
     }
 }

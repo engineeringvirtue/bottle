@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::str::FromStr;
+use std::str::{FromStr, from_utf8};
 use uuid::Uuid;
 
 use oauth2;
 use iron::prelude::*;
-use iron::{BeforeMiddleware, AfterMiddleware, AroundMiddleware, status};
+use iron::{BeforeMiddleware, AfterMiddleware, AroundMiddleware, status, modifiers::{RedirectRaw, Redirect}};
 use iron_sessionstorage_0_6::traits::*;
 use iron_sessionstorage_0_6::{Session, SessionStorage, backends::SignedCookieBackend};
 use handlebars_iron::{Template, handlebars::Context, HandlebarsEngine, DirectorySource};
@@ -13,20 +13,23 @@ use staticfile::Static;
 use mount::Mount;
 use params::{Params, Value};
 use serenity::model::id;
+use serenity::model::guild;
 use serde_json;
 
 use model::*;
+use model::id::*;
 use data::*;
+use bottle;
 
 #[derive(Clone, Deserialize, Serialize)]
 struct SessionData {
-    session_id: Uuid,
+    id: Uuid,
     redirect: Option<String>
 }
 
 impl SessionData {
     fn new() -> Self {
-        SessionData {session_id: Uuid::new_v4(), redirect: None}
+        SessionData { id: Uuid::new_v4(), redirect: None}
     }
 }
 
@@ -38,12 +41,14 @@ impl iron_sessionstorage_0_6::Value for SessionData {
     }
 }
 
-struct PrerequisiteMiddleware {pool: ConnPool, oauth: oauth2::Config}
+struct PrerequisiteMiddleware {pool: ConnPool, oauth: oauth2::Config, cfg: Config}
 
 impl BeforeMiddleware for PrerequisiteMiddleware {
     fn before(&self, req: &mut Request) -> IronResult<()> {
         req.extensions.insert::<DConn>(self.pool.clone());
         req.extensions.insert::<DOauth2>(self.oauth.clone());
+        req.extensions.insert::<DConfig>(self.cfg.clone());
+
         Ok(())
     }
 }
@@ -54,9 +59,15 @@ impl<'a, 'b> GetConnection for Request<'a, 'b> {
     }
 }
 
+impl<'a, 'b> GetConfig for Request<'a, 'b> {
+    fn get_cfg(&self) -> Config {
+        self.extensions.get::<DConfig>().unwrap().clone()
+    }
+}
+
 struct StatusMiddleware;
 impl AfterMiddleware for StatusMiddleware {
-    fn after(&self, req: &mut Request, res: Response) -> IronResult<Response> {
+    fn after(&self, _req: &mut Request, res: Response) -> IronResult<Response> {
         match res.status {
             Some(status::NotFound) => {
                 Ok(Response::with(Template::new("404", 0)))
@@ -70,16 +81,35 @@ impl AfterMiddleware for StatusMiddleware {
     }
 }
 
-fn get_user_data(uid: UserId, conn: &Conn) -> Res<HashMap<&str, String>> {
+#[derive(Deserialize, Serialize)]
+struct BottlePage {
+    contents: String, time_pushed: String, image: Option<String>, guild: Option<String>
+}
+
+#[derive(Deserialize, Serialize)]
+struct UserPage {
+    tag: String, pfp: String, xp: i32, ranked: i64, num_bottles: i64, recent_bottles: Vec<BottlePage>
+}
+
+fn get_user_data(uid: UserId, conn: &Conn) -> Res<UserPage> {
     let udata = User::get(uid, conn);
-    let bottles = udata.get_last_bottles(5, conn)?;
     let user = id::UserId(udata.id as u64).to_user()?;
-    let mut data = HashMap::new();
-    data.insert("tag", user.tag());
-    data.insert("pfp", user.avatar_url().unwrap_or(ANONYMOUS_AVATAR.to_owned()));
-    data.insert("xp", udata.xp.to_string());
-    data.insert("ranked", udata.get_ranking(conn)?.to_string());
-    data.insert("numbottles", udata.get_num_bottles(conn)?.to_string());
+
+    let data = UserPage {
+        tag: user.tag(),
+        pfp: user.avatar_url().unwrap_or(ANONYMOUS_AVATAR.to_owned()),
+        xp: udata.xp,
+        ranked: udata.get_ranking(conn)?,
+        num_bottles: udata.get_num_bottles(conn)?,
+        recent_bottles: udata.get_last_bottles(5, conn)?.into_iter().map(|bottle| {
+            BottlePage {
+                contents: bottle.contents,
+                time_pushed: bottle.time_pushed.format(&"%m/%d/%y - %H:%M").to_string(),
+                image: bottle.image,
+                guild: bottle.guild.and_then(|x| id::GuildId(x as u64).get().ok()).map(|x: guild::PartialGuild| x.name)
+            }
+        }).collect()
+    };
 
     Ok(data)
 }
@@ -109,22 +139,21 @@ fn user(req: &mut Request) -> IronResult<Response> {
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
 struct DUserData {
-    id: i64
+    id: String,
+    username: String,
+    discriminator: String
 }
 
-const GETUSER: &str = "https://discordapp.com/users/@me";
+const GETUSER: &str = "https://discordapp.com/api/users/@me";
 impl DUserData {
     fn get(access_token: String) -> Res<Self> {
-        use http_req::{request::RequestBuilder, url::Url};
+        use reqwest;
 
-        let mut body = HashMap::new();
-        body.insert("access_token", access_token);
+        let res =
+            reqwest::Client::new().get(GETUSER).header("Authorization", format!("Bearer {}", access_token)).send()?
+            .text()?;
 
-        let b = bincode::serialize(&body)?;
-        let res = RequestBuilder::new(Url::from_str(GETUSER)?)
-            .body(b.as_slice()).send()?;
-
-        Ok(bincode::deserialize(res.body())?)
+        Ok(serde_json::from_str(&res)?)
     }
 }
 
@@ -132,59 +161,119 @@ fn set_session(sesd: SessionData, ses: &mut Session) {
    ses.set(sesd).unwrap()
 }
 
-fn get_session(ses: &Session) -> SessionData {
-    ses.get::<SessionData>().unwrap().unwrap_or(SessionData::new())
+fn get_session(ses: &mut Session) -> SessionData {
+    ses.get::<SessionData>().unwrap().unwrap_or_else(|| {
+        let sesd = SessionData::new();
+        set_session(sesd.clone(), ses);
+        sesd
+    })
 }
 
-fn get_user(ses: SessionData, conn: &Conn) -> Option<User> {
-    User::from_ses(ses.session_id, conn).ok()
+fn get_user(ses: &SessionData, conn: &Conn) -> Option<User> {
+    User::from_session(ses.id, conn).ok()
 }
 
-//o look an oauth token, lez jus pass it in here
 fn set_tok(ses: &mut Session, tok: oauth2::Token, conn: &Conn) -> Res<()> {
-    let uid = DUserData::get(tok.access_token)?.id;
+    let uid = DUserData::get(tok.access_token)?.id.parse()?;
     let mut u = User::get(uid, conn);
 
     let sesd = get_session(ses);
-    let session_id = sesd.session_id;
-    u.session = Some(sesd.session_id);
+    u.session = Some(sesd.id);
     u.update(conn)?;
 
     Ok(())
 }
 
-//report: get_user -> make report... if get user fails, redirect to oauth with hashed session id and set redirect url
-//redirect: check code, set token, redirect to redirect url
+fn report(req: &mut Request) -> IronResult<Response> {
+    let bid = req.extensions.get::<Router>().unwrap()
+        .find("bottle").and_then(|x| x.parse().ok()).unwrap();
+
+    let conn = &req.get_conn();
+    if let Ok(bottle) = Bottle::get(bid, conn) {
+        let session = get_session(req.session());
+        match get_user(&session, conn) {
+            Some(mut x) => {
+                let msg = bottle::report_bottle(bottle, x.id, conn, &req.get_cfg()).unwrap();
+                let alreadyexists = Report {user: x.id, bottle: bid, message: msg.id.as_i64()}.make(conn).is_err();
+
+                if !alreadyexists {
+                    x.xp += REPORTXP;
+                    x.update(conn);
+                }
+
+                Ok(Response::with( Template::new("reportmade", alreadyexists)))
+            },
+            None => {
+                let mut oauth = req.extensions.get::<DOauth2>().unwrap().clone()
+                    .set_state(session.id.to_string());
+
+                set_session(SessionData {redirect: Some(req.url.to_string()), ..session}, req.session());
+                Ok(Response::with((status::TemporaryRedirect, RedirectRaw (oauth.authorize_url().to_string()))))
+            }
+        }
+    } else {
+        Ok(Response::with(status::NotFound))
+    }
+}
+
+fn redirect(req: &mut Request) -> IronResult<Response> {
+    let params = req.get_ref::<Params>().unwrap().clone();
+
+    let session = get_session(req.session());
+    match params.find(&["state"]) {
+        Some(Value::String(state)) if state.clone() == session.id.to_string() => {
+            if let Some(Value::String(code)) = params.find(&["code"]) {
+                let oauth = req.extensions.get::<DOauth2>().unwrap().clone();
+
+                if let Ok(tok) = oauth.exchange_code(code.clone()) {
+                    let conn = &req.get_conn();
+                    set_tok(req.session(), tok, conn).unwrap();
+                }
+            }
+
+            match session.redirect {
+                Some(ref redirect) => Ok(Response::with((status::TemporaryRedirect, RedirectRaw(redirect.clone())))),
+                _ => Ok(Response::with(status::Ok))
+            }
+        },
+
+        _ => {
+            Ok(Response::with(status::BadRequest))
+        }
+    }
+}
 
 pub fn start_serv (db: ConnPool, cfg: Config) {
+    let reqcfg = cfg.clone();
     let oauthcfg = oauth2::Config::new(
         cfg.client_id, cfg.client_secret, "https://discordapp.com/api/oauth2/authorize", "https://discordapp.com/api/oauth2/token"
     )
         .add_scope("identify")
-        .set_redirect_url(format!("{}/oauth", cfg.host_url));
+        .set_redirect_url(format!("http://{}/oauth", cfg.host_url));
 
     let mut router = Router::new();
     router.get("/", home, "home");
     router.get("/:user", user, "user");
-//    router.get("/report/:bottle", report, "report");
-//    router.get("/oauth", redirect, "redirect");
+    router.get("/report/:bottle", report, "report");
+    router.get("/oauth", redirect, "redirect");
 
     let mut chain = Chain::new(router);
 
     let mut hbse = HandlebarsEngine::new();
-    hbse.add(Box::new(DirectorySource::new("./res/", ".hbs")));
+    hbse.add(Box::new(DirectorySource::new("./res/", ".html")));
     hbse.reload().unwrap();
 
-    chain.link_before(PrerequisiteMiddleware {pool: db, oauth: oauthcfg});
     chain.link_after(hbse);
     chain.link_after(StatusMiddleware);
-    chain.link_around(SessionStorage::new(SignedCookieBackend::new(cfg.cookie_sig.clone().into_bytes())));
+    chain.link_around(SessionStorage::new(SignedCookieBackend::new(cfg.cookie_sig.into_bytes())));
+    chain.link_before(PrerequisiteMiddleware {pool: db, oauth: oauthcfg, cfg: reqcfg});
 
     let mut mount = Mount::new();
     mount.mount("/", chain);
+    mount.mount("/favicon.ico", Static::new("./assets/favicon.ico"));
     mount.mount("/style", Static::new("./res/style"));
     mount.mount("/img", Static::new("./res/img"));
 
     let iron = Iron::new(mount);
-    let web = iron.http(&cfg.host_url).unwrap();
+    let _ = iron.http(&cfg.host_url).unwrap();
 }
