@@ -70,7 +70,7 @@ impl AfterMiddleware for StatusMiddleware {
     fn after(&self, _req: &mut Request, res: Response) -> IronResult<Response> {
         match res.status {
             Some(status::NotFound) => {
-                Ok(Response::with(Template::new("404", 0)))
+                Ok(Response::with((Template::new("notfound", &false), status::NotFound)))
             },
             _ => Ok(res)
         }
@@ -127,14 +127,18 @@ fn home(req: &mut Request) -> IronResult<Response> {
 }
 
 fn user(req: &mut Request) -> IronResult<Response> {
-    let conn: &Conn = &req.get_conn();
-    let uid = req.extensions.get::<Router>().unwrap()
-        .find("user").and_then(|x| x.parse().ok()).unwrap();
+    let udata = req.extensions.get::<Router>().unwrap()
+        .find("user").and_then(|x| x.parse().ok()).and_then(|uid| {
 
-    let udata = get_user_data(uid, conn).unwrap();
+        let conn: &Conn = &req.get_conn();
+        get_user_data(uid, conn).ok()
+    });
 
-    let resp = Response::with(Template::new("user", &udata));
-    Ok(resp)
+
+    match udata {
+        Some(udata) => Ok(Response::with(Template::new("user", &udata))),
+        None => Ok(Response::with(status::NotFound))
+    }
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
@@ -186,10 +190,11 @@ fn set_tok(ses: &mut Session, tok: oauth2::Token, conn: &Conn) -> Res<()> {
 
 fn report(req: &mut Request) -> IronResult<Response> {
     let bid = req.extensions.get::<Router>().unwrap()
-        .find("bottle").and_then(|x| x.parse().ok()).unwrap();
+        .find("bottle").and_then(|x| x.parse().ok());
+    let bid = match bid { Some(x) => x, None => return Ok(Response::with(status::NotFound)) };
 
     let conn = &req.get_conn();
-    if let Ok(bottle) = Bottle::get(bid, conn) {
+    if let Some (bottle) = Bottle::get(bid, conn).ok() {
         let session = get_session(req.session());
         match get_user(&session, conn) {
             Some(mut x) => {
@@ -198,10 +203,10 @@ fn report(req: &mut Request) -> IronResult<Response> {
 
                 if !alreadyexists {
                     x.xp += REPORTXP;
-                    x.update(conn);
+                    x.update(conn).unwrap();
                 }
 
-                Ok(Response::with( Template::new("reportmade", alreadyexists)))
+                Ok(Response::with(Template::new("reportmade", alreadyexists)))
             },
             None => {
                 let mut oauth = req.extensions.get::<DOauth2>().unwrap().clone()
@@ -263,14 +268,13 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
     hbse.add(Box::new(DirectorySource::new("./res/", ".html")));
     hbse.reload().unwrap();
 
-    chain.link_after(hbse);
-    chain.link_after(StatusMiddleware);
     chain.link_around(SessionStorage::new(SignedCookieBackend::new(cfg.cookie_sig.into_bytes())));
     chain.link_before(PrerequisiteMiddleware {pool: db, oauth: oauthcfg, cfg: reqcfg});
+    chain.link_after(StatusMiddleware);
+    chain.link_after(hbse);
 
     let mut mount = Mount::new();
     mount.mount("/", chain);
-    mount.mount("/favicon.ico", Static::new("./assets/favicon.ico"));
     mount.mount("/style", Static::new("./res/style"));
     mount.mount("/img", Static::new("./res/img"));
 
