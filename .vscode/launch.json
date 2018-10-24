@@ -8,7 +8,7 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/bottled_discord.exe",
+            "program": "${workspaceFolder}/target/debug/bottle.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

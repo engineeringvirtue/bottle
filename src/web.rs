@@ -294,7 +294,7 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
         cfg.client_id, cfg.client_secret, "https://discordapp.com/api/oauth2/authorize", "https://discordapp.com/api/oauth2/token"
     )
         .add_scope("identify")
-        .set_redirect_url(format!("http://{}/oauth", cfg.host_url));
+        .set_redirect_url(format!("{}/oauth", cfg.host_url));
 
     let mut router = Router::new();
     router.get("/", home, "home");
@@ -319,5 +319,5 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
     mount.mount("/img", Static::new("./res/img"));
 
     let iron = Iron::new(mount);
-    let _ = iron.http(&cfg.host_url).unwrap();
+    let _ = iron.http("0.0.0.0:8080", ).unwrap();
 }

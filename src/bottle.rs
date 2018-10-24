@@ -38,7 +38,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
             .description(bottle.contents.clone())
             .timestamp(&DateTime::<Utc>::from_utc(bottle.time_pushed, Utc))
             .color(level_to_col(level))
-            .field("Report", format!("http://{}/report/{}", cfg.host_url, bottle.id), false)
+            .field("Report", format!("{}/report/{}", cfg.host_url, bottle.id), false)
             .footer(|footer|
                 if let Some(ref guild) = bottle.guild.and_then(|guild| GuildId(guild as u64).to_partial_guild().ok()) {
                     let mut f = footer.text(&guild.name);
@@ -59,7 +59,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
 
                     let avatar = user.as_ref().ok().and_then(|u| u.avatar_url()).unwrap_or(ERROR_AVATAR.to_owned());
 
-                    author.url(&format!("http://{}/{}", cfg.host_url, bottle.user.to_string()))
+                    author.url(&format!("{}/{}", cfg.host_url, bottle.user.to_string()))
                         .name(&username).icon_url(&avatar)
                 } else {
                     author.name("Anonymous").icon_url(&ANONYMOUS_AVATAR)
@@ -137,7 +137,7 @@ pub fn del_bottle(bid: BottleId, conn:&Conn) -> Res<()> {
     for b in GuildBottle::get_from_bottle(bid, conn)? {
         let guild = Guild::get(b.guild, conn);
         if let Some(mut msg) = guild.bottle_channel.and_then(|bchan| ChannelId(bchan as u64).message(MessageId(b.message as u64)).ok()) {
-            let _ = msg.edit(|x| x.content("DELETED"));
+            let _ = msg.edit(|x| x.embed(|x| x.title("DELETED").description("This bottle has been deleted by an admin.")));
         }
     }
 

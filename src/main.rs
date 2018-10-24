@@ -88,7 +88,7 @@ impl EventHandler for Handler {
                     }
 
                     if !user.admin && user.get_banned(&conn)? {
-                        return Err("You are banned from using BottledDiscord! Appeal by dming the global admins!".into());
+                        return Err("You are banned from using Bottle! Appeal by dming the global admins!".into());
                     }
 
                     let mut contents = new_message.content.clone();
