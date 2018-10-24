@@ -20,10 +20,6 @@
             margin: 5% 0;
         }
 
-        .header span {
-            margin: 0;
-        }
-
         .header img {
             height: 4em;
             margin-right: 15px;
@@ -79,11 +75,21 @@
             bottom: 0;
             padding: 10px;
         }
+
+        .admin {
+            background: #2063FF;
+            color: white;
+            padding: 5px;
+            border-radius: 2px;
+            margin-left: 10px;
+        }
     </style>
 </head>
 
 <body>
-    <div class="header" ><img src="{{ pfp }}" class="pfp" /> <h1>{{ tag }}</h1></div>
+    <div class="header" ><img src="{{ pfp }}" class="pfp" /> <h1>{{ tag }}</h1>
+        {{#if admin}}<span class="admin" >ADMIN</span>{{/if}}
+    </div>
     <div class="data" >
         <div class="stats" >
             <span class="stat" ><b>{{ xp }}</b> XP</span> <span class="stat" >, ranked #<b>{{ ranked }}</b></span>

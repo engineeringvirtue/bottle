@@ -1,14 +1,16 @@
-use std::collections::HashMap;
+use std;
+use std::{collections::HashMap, fmt};
 use std::str::{FromStr, from_utf8};
 use uuid::Uuid;
 
 use oauth2;
+use iron;
 use iron::prelude::*;
 use iron::{BeforeMiddleware, AfterMiddleware, AroundMiddleware, status, modifiers::{RedirectRaw, Redirect}};
 use iron_sessionstorage_0_6::traits::*;
 use iron_sessionstorage_0_6::{Session, SessionStorage, backends::SignedCookieBackend};
 use handlebars_iron::{Template, handlebars::Context, HandlebarsEngine, DirectorySource};
-use router::Router;
+use router::{Router, NoRoute};
 use staticfile::Static;
 use mount::Mount;
 use params::{Params, Value};
@@ -41,6 +43,46 @@ impl iron_sessionstorage_0_6::Value for SessionData {
     }
 }
 
+#[derive(Debug)]
+struct InternalError(String);
+#[derive(Debug)]
+struct ParamError;
+#[derive(Debug)]
+struct AuthError;
+
+impl fmt::Display for InternalError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let InternalError(desc) = self;
+        write!(f, "An internal error occured: {}", desc)
+    }
+}
+
+impl iron::Error for InternalError {}
+
+impl InternalError {
+    fn new<T, F: Fn() -> Res<T>>(f: F) -> IronResult<T> {
+        f().map_err(|err| {
+            IronError::new(InternalError(err.description().to_string()), status::InternalServerError)
+        })
+    }
+}
+
+impl fmt::Display for ParamError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Error finding/parsing a parameter")
+    }
+}
+
+impl iron::Error for ParamError {}
+
+impl fmt::Display for AuthError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Error authorizing")
+    }
+}
+
+impl iron::Error for AuthError {}
+
 struct PrerequisiteMiddleware {pool: ConnPool, oauth: oauth2::Config, cfg: Config}
 
 impl BeforeMiddleware for PrerequisiteMiddleware {
@@ -67,17 +109,12 @@ impl<'a, 'b> GetConfig for Request<'a, 'b> {
 
 struct StatusMiddleware;
 impl AfterMiddleware for StatusMiddleware {
-    fn after(&self, _req: &mut Request, res: Response) -> IronResult<Response> {
-        match res.status {
-            Some(status::NotFound) => {
-                Ok(Response::with((Template::new("notfound", &false), status::NotFound)))
-            },
-            _ => Ok(res)
-        }
-    }
-
     fn catch(&self, req: &mut Request, err: IronError) -> IronResult<Response> {
-        self.after(req, err.response)
+        if err.error.is::<NoRoute>() || err.error.is::<ParamError>() {
+            Ok(Response::with((status::NotFound, Template::new("notfound", &false))))
+        } else {
+            Err(err)
+        }
     }
 }
 
@@ -88,7 +125,7 @@ struct BottlePage {
 
 #[derive(Deserialize, Serialize)]
 struct UserPage {
-    tag: String, pfp: String, xp: i32, ranked: i64, num_bottles: i64, recent_bottles: Vec<BottlePage>
+    tag: String, admin: bool, pfp: String, xp: i32, ranked: i64, num_bottles: i64, recent_bottles: Vec<BottlePage>
 }
 
 fn get_user_data(uid: UserId, conn: &Conn) -> Res<UserPage> {
@@ -96,7 +133,7 @@ fn get_user_data(uid: UserId, conn: &Conn) -> Res<UserPage> {
     let user = id::UserId(udata.id as u64).to_user()?;
 
     let data = UserPage {
-        tag: user.tag(),
+        tag: user.tag(), admin: udata.admin,
         pfp: user.avatar_url().unwrap_or(ANONYMOUS_AVATAR.to_owned()),
         xp: udata.xp,
         ranked: udata.get_ranking(conn)?,
@@ -106,24 +143,12 @@ fn get_user_data(uid: UserId, conn: &Conn) -> Res<UserPage> {
                 contents: bottle.contents,
                 time_pushed: bottle.time_pushed.format(&"%m/%d/%y - %H:%M").to_string(),
                 image: bottle.image,
-                guild: bottle.guild.and_then(|x| id::GuildId(x as u64).get().ok()).map(|x: guild::PartialGuild| x.name)
+                guild: bottle.guild.and_then(|x| id::GuildId(x as u64).to_partial_guild().ok()).map(|x: guild::PartialGuild| x.name)
             }
         }).collect()
     };
 
     Ok(data)
-}
-
-fn home(req: &mut Request) -> IronResult<Response> {
-    let conn: &Conn = &req.get_conn();
-
-    let mut data = HashMap::new();
-    data.insert("bottlecount", get_bottle_count(&conn).unwrap());
-    data.insert("usercount", get_user_count(&conn).unwrap());
-    data.insert("guildcount", get_guild_count(&conn).unwrap());
-
-    let resp = Response::with(Template::new("home", &data));
-    Ok(resp)
 }
 
 fn user(req: &mut Request) -> IronResult<Response> {
@@ -137,7 +162,7 @@ fn user(req: &mut Request) -> IronResult<Response> {
 
     match udata {
         Some(udata) => Ok(Response::with(Template::new("user", &udata))),
-        None => Ok(Response::with(status::NotFound))
+        None => Err(IronError::new(ParamError, status::NotFound))
     }
 }
 
@@ -190,8 +215,8 @@ fn set_tok(ses: &mut Session, tok: oauth2::Token, conn: &Conn) -> Res<()> {
 
 fn report(req: &mut Request) -> IronResult<Response> {
     let bid = req.extensions.get::<Router>().unwrap()
-        .find("bottle").and_then(|x| x.parse().ok());
-    let bid = match bid { Some(x) => x, None => return Ok(Response::with(status::NotFound)) };
+        .find("bottle").and_then(|x| x.parse().ok())
+        .ok_or(IronError::new(ParamError, status::BadRequest))?;
 
     let conn = &req.get_conn();
     if let Some (bottle) = Bottle::get(bid, conn).ok() {
@@ -217,7 +242,7 @@ fn report(req: &mut Request) -> IronResult<Response> {
             }
         }
     } else {
-        Ok(Response::with(status::NotFound))
+        Err(IronError::new(ParamError, status::NotFound))
     }
 }
 
@@ -243,9 +268,24 @@ fn redirect(req: &mut Request) -> IronResult<Response> {
         },
 
         _ => {
-            Ok(Response::with(status::BadRequest))
+            Err(IronError::new(AuthError, status::BadRequest))
         }
     }
+}
+
+fn home(req: &mut Request) -> IronResult<Response> {
+    let conn: &Conn = &req.get_conn();
+
+    let data = InternalError::new(|| {
+        let mut data = HashMap::new();
+        data.insert("bottlecount", get_bottle_count(&conn).map_err(|x| Box::new(x))?);
+        data.insert("usercount", get_user_count(&conn)?);
+        data.insert("guildcount", get_guild_count(&conn)?);
+        Ok(data)
+    })?;
+
+    let resp = Response::with(Template::new("home", &data));
+    Ok(resp)
 }
 
 pub fn start_serv (db: ConnPool, cfg: Config) {

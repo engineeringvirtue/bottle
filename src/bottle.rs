@@ -38,7 +38,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
             .description(bottle.contents.clone())
             .timestamp(&DateTime::<Utc>::from_utc(bottle.time_pushed, Utc))
             .color(level_to_col(level))
-            .field("Report", format!("NSFW content? ~~Politics?~~ You can report it here: http://{}/report/{}", cfg.host_url, bottle.id), false)
+            .field("Report", format!("http://{}/report/{}", cfg.host_url, bottle.id), false)
             .footer(|footer|
                 if let Some(ref guild) = bottle.guild.and_then(|guild| GuildId(guild as u64).to_partial_guild().ok()) {
                     let mut f = footer.text(&guild.name);
@@ -136,8 +136,8 @@ pub fn report_bottle(bottle: Bottle, user: model::UserId, conn: &Conn, cfg: &Con
 pub fn del_bottle(bid: BottleId, conn:&Conn) -> Res<()> {
     for b in GuildBottle::get_from_bottle(bid, conn)? {
         let guild = Guild::get(b.guild, conn);
-        if let Some(msg) = guild.bottle_channel.and_then(|bchan| ChannelId(bchan as u64).message(MessageId(b.message as u64)).ok()) {
-            let _ = msg.delete();
+        if let Some(mut msg) = guild.bottle_channel.and_then(|bchan| ChannelId(bchan as u64).message(MessageId(b.message as u64)).ok()) {
+            let _ = msg.edit(|x| x.content("DELETED"));
         }
     }
 
