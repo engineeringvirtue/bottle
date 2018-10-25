@@ -60,7 +60,7 @@ impl fmt::Display for InternalError {
 impl iron::Error for InternalError {}
 
 impl InternalError {
-    fn new<T, F: Fn() -> Res<T>>(f: F) -> IronResult<T> {
+    fn with<T, F: Fn() -> Res<T>>(f: F) -> IronResult<T> {
         f().map_err(|err| {
             IronError::new(InternalError(err.description().to_string()), status::InternalServerError)
         })
@@ -276,7 +276,7 @@ fn redirect(req: &mut Request) -> IronResult<Response> {
 fn home(req: &mut Request) -> IronResult<Response> {
     let conn: &Conn = &req.get_conn();
 
-    let data = InternalError::new(|| {
+    let data = InternalError::with(|| {
         let mut data = HashMap::new();
         data.insert("bottlecount", get_bottle_count(&conn).map_err(Box::new)?);
         data.insert("usercount", get_user_count(&conn)?);

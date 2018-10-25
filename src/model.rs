@@ -17,7 +17,7 @@ pub const REPLYXP: i32 = 75;
 pub const URLXP: i32 = 80;
 pub const IMAGEXP: i32 = 45;
 pub const REPORTXP: i32 = 25;
-pub const COOLDOWN: i64 = 45;
+pub const COOLDOWN: i64 = 10;
 
 //sorry github
 pub const ERROR_AVATAR: &str = "https://github.com/engineeringvirtue/bottled-discord/blob/master/assets/fetcherror.png?raw=true";

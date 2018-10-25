@@ -67,7 +67,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
             });
 
         if let Some(ref img) = bottle.image {
-            e = e.image(img);
+            e = e.image(img).url(img);
         }
 
         if let Some(ref url) = bottle.url {
@@ -145,12 +145,12 @@ pub fn del_bottle(bid: BottleId, conn:&Conn) -> Res<()> {
 
 pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: Config) -> Res<()> {
     let mid = r.message_id.as_i64();
-
-    let user = User::get(r.user_id.as_i64(), conn);
     let emojiid = match r.emoji {
         ReactionType::Custom {id: emojiid, ..} => *emojiid.as_u64(),
         _ => return Ok (())
     };
+
+    let user = User::get(r.user_id.as_i64(), conn);
 
     if user.admin {
         if let Ok(gbottle) = GuildBottle::get_from_message(mid, conn) {

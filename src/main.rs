@@ -99,17 +99,12 @@ impl EventHandler for Handler {
                     };
 
                     let url = new_message.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
-                    let image = new_message.attachments.get(0).and_then(|a: &Attachment| a.dimensions().map(|_| a.url.clone()));
+                    let image = new_message.attachments.get(0).map(|a: &Attachment| a.url.clone());
 
                     user.xp += match replyto {Some(_) => REPLYXP, None => PUSHXP};
 
-                    if url.is_some() {
-                        user.xp += URLXP;
-                    }
-                    
-                    if image.is_some() {
-                        user.xp += IMAGEXP;
-                    }
+                    if url.is_some() { user.xp += URLXP; }
+                    if image.is_some() { user.xp += IMAGEXP; }
 
                     user.update(&conn)?;
 
@@ -149,10 +144,6 @@ impl EventHandler for Handler {
     fn reaction_remove(&self, ctx: Context, r: Reaction) {
         let conn = &ctx.get_conn();
         bottle::react(conn, r, false, ctx.get_cfg()).unwrap();
-    }
-
-    fn message_update(&self, _ctx: Context, _new_data: MessageUpdateEvent) {
-        //TODO: support message edits and deletion
     }
 
     fn guild_create (&self, ctx: Context, guild: serenity::model::guild::Guild, is_new: bool) {
