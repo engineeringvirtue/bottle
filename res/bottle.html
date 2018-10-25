@@ -1,12 +1,12 @@
 <div class="bottle" >
-    <div class="bottle main" >
-        <p class="bottle content" >
+    <div class="main" >
+        <p class="content" >
             &ldquo;{{ contents }}&rdquo;
         </p>
         {{#if image}}
-            <div class="bottle image" ><img src="{{ image }}" /></div>
+            <div class="image" ><img src="{{ image }}" /></div>
         {{/if}}
         
-        <span class="bottle time" >{{ time_pushed }} &middot; {{ guild }}</span>
+        <span class="time" >{{ time_pushed }} &middot; {{ guild }}</span>
     </div>
 </div>

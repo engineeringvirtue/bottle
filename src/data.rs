@@ -66,7 +66,7 @@ impl Guild {
         GuildBottle::belonging_to(self).order(guild_bottle::time_recieved.desc()).first(conn)
     }
 
-    pub fn delete(gid: GuildId, conn:&Conn) -> Res<usize> {
+    pub fn del(gid: GuildId, conn:&Conn) -> Res<usize> {
         delete(guild::table).filter(guild::id.eq(gid)).execute(conn)
     }
 }

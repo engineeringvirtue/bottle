@@ -1,6 +1,14 @@
 <div id="particles" ></div>
 <script src="/style/particles.min.js"></script>
 
+<style>
+  #particles {
+    position: fixed;
+    top: 0; left: 0; bottom: 0; right: 0;
+    filter: blur(4px);
+  }
+</style>
+
 <script>
 particlesJS('particles', {
   "particles": {
@@ -44,7 +52,7 @@ particlesJS('particles', {
       "random": true,
       "anim": {
         "enable": true,
-        "speed": 12.269035408436187,
+        "speed": 1,
         "size_min": 8.179356938957458,
         "sync": false
       }
@@ -58,12 +66,12 @@ particlesJS('particles', {
     },
     "move": {
       "enable": true,
-      "speed": 2,
+      "speed": 1,
       "direction": "none",
-      "random": false,
+      "random": true,
       "straight": false,
       "out_mode": "out",
-      "bounce": false,
+      "bounce": true,
       "attract": {
         "enable": false,
         "rotateX": 600,
@@ -96,11 +104,11 @@ particlesJS('particles', {
         "size": 40,
         "duration": 2,
         "opacity": 8,
-        "speed": 3
+        "speed": 1
       },
       "repulse": {
         "distance": 615.3010180435024,
-        "duration": 0.4
+        "duration": 3
       },
       "push": {
         "particles_nb": 4

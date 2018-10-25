@@ -78,7 +78,7 @@ CREATE TABLE "ban" (
 
 ALTER TABLE "bottle" ADD CONSTRAINT "bottle_fk0" FOREIGN KEY ("reply_to") REFERENCES "bottle"("id") ON DELETE CASCADE;
 ALTER TABLE "bottle" ADD CONSTRAINT "bottle_fk1" FOREIGN KEY ("user") REFERENCES "user"("id");
-ALTER TABLE "bottle" ADD CONSTRAINT "bottle_fk2" FOREIGN KEY ("guild") REFERENCES "guild"("id");
+ALTER TABLE "bottle" ADD CONSTRAINT "bottle_fk2" FOREIGN KEY ("guild") REFERENCES "guild"("id") ON DELETE SET NULL;
 
 
 ALTER TABLE "guild_bottle" ADD CONSTRAINT "guild_bottle_fk0" FOREIGN KEY ("bottle") REFERENCES "bottle"("id") ON DELETE CASCADE;

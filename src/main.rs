@@ -75,16 +75,14 @@ impl EventHandler for Handler {
 
                     let mut user = User::get(userid, &conn);
                     let lastbottle = user.get_bottle(&conn).ok();
-                    match lastbottle {
-                        Some (ref bottle) => {
-                            let since_push = now().signed_duration_since(bottle.time_pushed);
-                            let cooldown = Duration::minutes(COOLDOWN);
-                            if since_push < cooldown && !user.admin {
-                                let towait = cooldown - since_push;
-                                return Err(format!("You must wait {} minutes before sending another bottle!", towait.num_minutes()).into())
-                            }
-                        },
-                        _ => ()
+                    if let Some (ref bottle) = lastbottle {
+                        let since_push = now().signed_duration_since(bottle.time_pushed);
+                        let cooldown = Duration::minutes(COOLDOWN);
+                        
+                        if since_push < cooldown && !user.admin {
+                            let towait = cooldown - since_push;
+                            return Err(format!("You must wait {} minutes before sending another bottle!", towait.num_minutes()).into())
+                        }
                     }
 
                     if !user.admin && user.get_banned(&conn)? {
@@ -105,10 +103,11 @@ impl EventHandler for Handler {
 
                     user.xp += match replyto {Some(_) => REPLYXP, None => PUSHXP};
 
-                    if let Some (_) = url {
+                    if url.is_some() {
                         user.xp += URLXP;
                     }
-                    if let Some (_) = image {
+                    
+                    if image.is_some() {
                         user.xp += IMAGEXP;
                     }
 
@@ -117,7 +116,7 @@ impl EventHandler for Handler {
                     let bottle = MakeBottle { message: msgid, reply_to: replyto, guild, user: user.id, time_pushed: now(), contents, url, image };
                     let connpool = ctx.get_pool();
                     thread::spawn(move || {
-                        bottle::distribute_bottle(bottle, &connpool.get_conn(), &cfg).ok();
+                        bottle::distribute_bottle(&bottle, &connpool.get_conn(), &cfg).ok();
                     });
 
                     Ok("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned())
@@ -175,7 +174,7 @@ impl EventHandler for Handler {
     }
 
     fn guild_delete (&self, ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
-        Guild::delete(incomplete.id.as_i64(), &ctx.get_conn()).ok();
+        Guild::del(incomplete.id.as_i64(), &ctx.get_conn()).unwrap();
     }
 
     fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {

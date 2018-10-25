@@ -38,7 +38,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
             .description(bottle.contents.clone())
             .timestamp(&DateTime::<Utc>::from_utc(bottle.time_pushed, Utc))
             .color(level_to_col(level))
-            .field("Report", format!("{}/report/{}", cfg.host_url, bottle.id), false)
+            .field("Report", format!("{}/report/{}", cfg.host_url, bottle.id), true)
             .footer(|footer|
                 if let Some(ref guild) = bottle.guild.and_then(|guild| GuildId(guild as u64).to_partial_guild().ok()) {
                     let mut f = footer.text(&guild.name);
@@ -80,7 +80,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
     Ok(msg)
 }
 
-pub fn distribute_to_guild(bottles: &Vec<Bottle>, guild: Guild, conn: &Conn, cfg:&Config) -> Res<()> {
+pub fn distribute_to_guild(bottles: &Vec<Bottle>, guild: &Guild, conn: &Conn, cfg:&Config) -> Res<()> {
     let bottlechannelid = ChannelId(guild.bottle_channel.ok_or("No bottle channel")? as u64);
 
     for (i, bottle) in bottles.iter().rev().enumerate() {
@@ -91,28 +91,26 @@ pub fn distribute_to_guild(bottles: &Vec<Bottle>, guild: Guild, conn: &Conn, cfg
     Ok (())
 }
 
-pub fn distribute_bottle (bottle: MakeBottle, conn:&Conn, cfg:&Config) -> Res<()> {
+const DELIVERNUM: i64 = 3;
+pub fn distribute_bottle (bottle: &MakeBottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottle = bottle.make(conn)?;
+    let bottles = bottle.get_reply_list(conn)?;
 
     let mut query = guild::table.into_boxed();
-
     if let Some(guild) = bottle.guild {
         query = query.filter(guild::id.ne(guild))
     }
 
-    query.filter(guild::bottle_channel.is_not_null()).order(random).first(conn)
-        .map_err(|err| -> Box<Error> { err.into() })
-        .and_then(|guild: Guild| -> Res<()> {
-            let bottles = bottle.get_reply_list(conn)?;
-            distribute_to_guild(&bottles, guild, conn, cfg)?;
+    let guilds: Vec<Guild> = query.filter(guild::bottle_channel.is_not_null()).order(random).limit(DELIVERNUM).load(conn)?;
 
-            Ok(())
-        }).ok();
+    for guild in guilds {
+        let _ = distribute_to_guild(&bottles, &guild, conn, cfg);
+    }
 
     Ok(())
 }
 
-pub fn report_bottle(bottle: Bottle, user: model::UserId, conn: &Conn, cfg: &Config) -> Res<Message> {
+pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Config) -> Res<Message> {
     let channel = ChannelId(cfg.admin_channel as u64);
     let user = UserId(user as u64).to_user()?;
     let msg = channel.say(&format!("REPORT FROM {}. USER ID {}, BOTTLE ID {}.", user.tag(), user.id, bottle.id))?;
@@ -150,7 +148,7 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: Config) -> Res<()> {
 
     let user = User::get(r.user_id.as_i64(), conn);
     let emojiid = match r.emoji {
-        ReactionType::Custom {id: emojiid, ..} => emojiid.as_u64().clone(),
+        ReactionType::Custom {id: emojiid, ..} => *emojiid.as_u64(),
         _ => return Ok (())
     };
 

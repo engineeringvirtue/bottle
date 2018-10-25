@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Bottled Discord | {{ tag }}</title>
+    <title>Bottle | {{ tag }}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="/style/main.css">
     <link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon">
@@ -36,8 +36,9 @@
         .data {
             display: flex;
             align-content: center;
-            justify-content: space-evenly;
+            justify-content: space-around;
             margin-bottom: 10%;
+            z-index: 1000;
         }
 
         .stats {
@@ -48,26 +49,27 @@
         .recent {
             padding: 2%;
             border-radius: 5px;
-            background-color: rgb(10, 11, 14)
+            flex-grow: 0.5;
         }
 
         .bottle {
             padding: 2%;
             margin: 1%;
-            background: #254565;
+            background: #0f4172;
+            box-shadow: rgba(0, 0, 0, 0.3) 0 0 50px;
         }
 
-        .bottle .main {
+        .main {
             display: flex;
             flex-direction: column;
         }
 
-        .bottle .content {
+        .content {
             font-size: 1.2em;
             color: white;
         }
 
-        .bottle .time {
+        .time {
             font-size: 0.5em;
             color: gray;
             position: relative;

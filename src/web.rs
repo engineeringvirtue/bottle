@@ -109,7 +109,7 @@ impl<'a, 'b> GetConfig for Request<'a, 'b> {
 
 struct StatusMiddleware;
 impl AfterMiddleware for StatusMiddleware {
-    fn catch(&self, req: &mut Request, err: IronError) -> IronResult<Response> {
+    fn catch(&self, _req: &mut Request, err: IronError) -> IronResult<Response> {
         if err.error.is::<NoRoute>() || err.error.is::<ParamError>() {
             Ok(Response::with((status::NotFound, Template::new("notfound", &false))))
         } else {
@@ -216,14 +216,14 @@ fn set_tok(ses: &mut Session, tok: oauth2::Token, conn: &Conn) -> Res<()> {
 fn report(req: &mut Request) -> IronResult<Response> {
     let bid = req.extensions.get::<Router>().unwrap()
         .find("bottle").and_then(|x| x.parse().ok())
-        .ok_or(IronError::new(ParamError, status::BadRequest))?;
+        .ok_or_else(|| IronError::new(ParamError, status::BadRequest))?;
 
     let conn = &req.get_conn();
-    if let Some (bottle) = Bottle::get(bid, conn).ok() {
+    if let Ok (bottle) = Bottle::get(bid, conn) {
         let session = get_session(req.session());
         match get_user(&session, conn) {
             Some(mut x) => {
-                let msg = bottle::report_bottle(bottle, x.id, conn, &req.get_cfg()).unwrap();
+                let msg = bottle::report_bottle(&bottle, x.id, conn, &req.get_cfg()).unwrap();
                 let alreadyexists = Report {user: x.id, bottle: bid, message: msg.id.as_i64()}.make(conn).is_err();
 
                 if !alreadyexists {
@@ -278,7 +278,7 @@ fn home(req: &mut Request) -> IronResult<Response> {
 
     let data = InternalError::new(|| {
         let mut data = HashMap::new();
-        data.insert("bottlecount", get_bottle_count(&conn).map_err(|x| Box::new(x))?);
+        data.insert("bottlecount", get_bottle_count(&conn).map_err(Box::new)?);
         data.insert("usercount", get_user_count(&conn)?);
         data.insert("guildcount", get_guild_count(&conn)?);
         Ok(data)
