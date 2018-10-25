@@ -141,7 +141,6 @@ pub struct Config {
     pub ban_emoji: u64,
     pub delete_emoji: u64,
     pub auto_admin: UserId,
-    pub debug: bool,
     pub cookie_sig: String
 }
 
