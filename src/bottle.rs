@@ -3,8 +3,9 @@ use chrono::{DateTime, Utc};
 use serenity::prelude::*;
 use serenity::model::misc::EmojiIdentifier;
 use serenity::model::id::{ChannelId, UserId, GuildId, EmojiId, MessageId};
-use serenity::model::channel::{Message, ReactionType, Reaction};
+use serenity::model::channel::{Message, ReactionType, Reaction, Embed, Attachment};
 use serenity::CACHE;
+use time::Duration;
 use diesel::prelude::*;
 use diesel::expression::Expression;
 use serenity::utils::Colour;
@@ -92,8 +93,7 @@ pub fn distribute_to_guild(bottles: &Vec<Bottle>, guild: &Guild, conn: &Conn, cf
 }
 
 const DELIVERNUM: i64 = 3;
-pub fn distribute_bottle (bottle: &MakeBottle, conn:&Conn, cfg:&Config) -> Res<()> {
-    let bottle = bottle.make(conn)?;
+pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles = bottle.get_reply_list(conn)?;
 
     let mut query = guild::table.into_boxed();
@@ -171,4 +171,78 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: Config) -> Res<()> {
     }
 
     Ok(())
+}
+
+pub fn give_xp(bottle: &Bottle, xp: i32, conn:&Conn) -> Res<()> {
+    let mut u = User::get(bottle.user, conn);
+    u.xp += xp;
+    u.update(conn)?;
+
+    if let Some(g) = bottle.guild {
+        let mut contribution = GuildContribution::get((g, u.id), conn);
+        contribution.xp += xp;
+        contribution.update(conn)?;
+    }
+
+    Ok(())
+}
+
+pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:Config) -> Res<String> {
+    let userid = new_message.author.id.as_i64();
+    let msgid = new_message.id.as_i64();
+    let conn = &connpool.get_conn();
+
+    let mut user = User::get(userid, conn);
+    let lastbottle = user.get_bottle(conn).ok();
+    if let Some (ref bottle) = lastbottle {
+        let since_push = now().signed_duration_since(bottle.time_pushed);
+        let cooldown = Duration::minutes(COOLDOWN);
+
+        if since_push < cooldown && !user.admin {
+            let towait = cooldown - since_push;
+            return Err(format!("You must wait {} minutes before sending another bottle!", towait.num_minutes()).into())
+        }
+    }
+
+    if !user.admin && user.get_banned(conn)? {
+        return Err("You are banned from using Bottle! Appeal by dming the global admins!".into());
+    }
+
+    let mut contents = new_message.content.clone();
+    let reply_to = match guild {
+        Some (g) if (&contents).starts_with(REPLY_PREFIX) => {
+            contents = contents.chars().skip(REPLY_PREFIX.chars().count()).collect();
+            let gbottle = Guild::get(g, conn).get_last_bottle(conn).map_err(|_| "No bottle to reply found!")?;
+            Some (gbottle.bottle)
+        }, _ => None
+    };
+
+    let url = new_message.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
+    let image = new_message.attachments.get(0).map(|a: &Attachment| a.url.clone());
+
+    user.update(conn)?;
+
+    let mut xp = 0;
+
+    if let Some(bid) = reply_to {
+        let replied = Bottle::get(bid, conn)?;
+        if replied.user != user.id {
+            give_xp(&replied, REPLYXP, conn)?;
+        }
+    }
+
+    xp += PUSHXP;
+    if url.is_some() { xp += URLXP; }
+    if image.is_some() { xp += IMAGEXP; }
+
+    let bottle = MakeBottle { message: msgid, reply_to, guild, user: user.id, time_pushed: now(), contents, url, image }
+        .make(conn)?;
+
+    give_xp(&bottle, xp, conn)?;
+
+    thread::spawn(move || {
+        distribute_bottle(&bottle, &connpool.get_conn(), &cfg).ok();
+    });
+
+    Ok("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned())
 }

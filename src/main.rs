@@ -54,8 +54,8 @@ use model::id::*;
 
 const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
 
-fn handle_ev_err<F: Fn() -> Res<String>> (replymsg: &Message, handler: F) {
-    match handler() {
+fn handle_ev_err (replymsg: &Message, res: Res<String>) {
+    match res {
         Ok(x) => replymsg.reply(&x).ok(),
         Err(x) => replymsg.reply(&x.to_string()).ok()
     };
@@ -67,57 +67,6 @@ impl EventHandler for Handler {
         if !new_message.author.bot {
             let conn = ctx.get_conn();
 
-            let new_bottle = |guild| {
-                handle_ev_err(&new_message, || {
-                    let userid = new_message.author.id.as_i64();
-                    let msgid = new_message.id.as_i64();
-                    let cfg = ctx.get_cfg();
-
-                    let mut user = User::get(userid, &conn);
-                    let lastbottle = user.get_bottle(&conn).ok();
-                    if let Some (ref bottle) = lastbottle {
-                        let since_push = now().signed_duration_since(bottle.time_pushed);
-                        let cooldown = Duration::minutes(COOLDOWN);
-                        
-                        if since_push < cooldown && !user.admin {
-                            let towait = cooldown - since_push;
-                            return Err(format!("You must wait {} minutes before sending another bottle!", towait.num_minutes()).into())
-                        }
-                    }
-
-                    if !user.admin && user.get_banned(&conn)? {
-                        return Err("You are banned from using Bottle! Appeal by dming the global admins!".into());
-                    }
-
-                    let mut contents = new_message.content.clone();
-                    let replyto = match guild {
-                        Some (g) if (&contents).starts_with(REPLY_PREFIX) => {
-                            contents = contents.chars().skip(REPLY_PREFIX.chars().count()).collect();
-                            let gbottle = Guild::get(g, &conn).get_last_bottle(&conn).map_err(|_| "No bottle to reply found!")?;
-                            Some (gbottle.bottle)
-                        }, _ => None
-                    };
-
-                    let url = new_message.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
-                    let image = new_message.attachments.get(0).map(|a: &Attachment| a.url.clone());
-
-                    user.xp += match replyto {Some(_) => REPLYXP, None => PUSHXP};
-
-                    if url.is_some() { user.xp += URLXP; }
-                    if image.is_some() { user.xp += IMAGEXP; }
-
-                    user.update(&conn)?;
-
-                    let bottle = MakeBottle { message: msgid, reply_to: replyto, guild, user: user.id, time_pushed: now(), contents, url, image };
-                    let connpool = ctx.get_pool();
-                    thread::spawn(move || {
-                        bottle::distribute_bottle(&bottle, &connpool.get_conn(), &cfg).ok();
-                    });
-
-                    Ok("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned())
-                });
-            };
-
             match new_message.channel() {
                 Some(Channel::Guild(ref channel)) => {
                     let channel = channel.read();
@@ -125,12 +74,11 @@ impl EventHandler for Handler {
                     let guilddata = Guild::get(gid, &conn);
 
                     if Some(channel.id.as_i64()) == guilddata.bottle_channel {
-                        new_bottle(Some(gid))
+                        handle_ev_err(&new_message, bottle::new_bottle(&new_message, Some(gid), ctx.get_pool(), ctx.get_cfg()))
                     }
                 },
 
-                Some(Channel::Private(_)) => new_bottle(None)
-                ,
+                Some(Channel::Private(_)) => handle_ev_err(&new_message, bottle::new_bottle(&new_message, None, ctx.get_pool(), ctx.get_cfg())),
                 _ => ()
             };
         }

@@ -52,10 +52,21 @@
             flex-grow: 0.5;
         }
 
+        .contributions {
+            margin-top: 10%;
+        }
+
         .bottle {
             padding: 2%;
             margin: 1%;
             background: #0f4172;
+            box-shadow: rgba(0, 0, 0, 0.3) 0 0 50px;
+        }
+        
+        .contribution {
+            padding: 5%;
+            margin: 2%;
+            background: #720f1c;
             box-shadow: rgba(0, 0, 0, 0.3) 0 0 50px;
         }
 
@@ -66,12 +77,22 @@
 
         .content {
             font-size: 1.2em;
+            word-break: break-word;
             color: white;
         }
 
         .time {
             font-size: 0.5em;
             color: gray;
+            position: relative;
+            right: 0;
+            bottom: 0;
+            padding: 10px;
+        }
+
+        .guild {
+            font-size: 0.9em;
+            color: white;
             position: relative;
             right: 0;
             bottom: 0;
@@ -96,6 +117,14 @@
         <div class="stats" >
             <span class="stat" ><b>{{ xp }}</b> XP</span> <span class="stat" >, ranked #<b>{{ ranked }}</b></span>
             <br><span class="stat" ><b>{{ num_bottles }}</b> bottles</span>
+
+            <div class="recent contributions" >
+                {{#each contributions}}
+                    {{> contribution}}
+                {{else}}
+                    No contributions by this user!
+                {{/each}}
+            </div>
         </div>
 
         <div class="recent" >

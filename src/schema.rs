@@ -22,6 +22,7 @@ table! {
 table! {
     guild (id) {
         id -> Int8,
+        public -> Bool,
         bottle_channel -> Nullable<Int8>,
         admin_channel -> Nullable<Int8>,
     }

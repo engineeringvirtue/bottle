@@ -12,11 +12,11 @@ use r2d2::{Pool, PooledConnection};
 use super::schema::*;
 
 pub const REPLY_PREFIX: &str = "->";
-pub const PUSHXP: i32 = 120;
-pub const REPLYXP: i32 = 75;
-pub const URLXP: i32 = 80;
-pub const IMAGEXP: i32 = 45;
-pub const REPORTXP: i32 = 25;
+pub const PUSHXP: i32 = 15;
+pub const REPLYXP: i32 = 65;
+pub const URLXP: i32 = 2;
+pub const IMAGEXP: i32 = 6;
+pub const REPORTXP: i32 = 20;
 pub const COOLDOWN: i64 = 10;
 
 //sorry github
@@ -80,13 +80,14 @@ pub struct Bottle {
 #[table_name="guild"]
 pub struct Guild {
     pub id: GuildId,
+    pub public: bool,
     pub bottle_channel: Option<i64>,
     pub admin_channel: Option<i64>
 }
 
 impl Guild {
     pub fn new (gid: GuildId) -> Guild {
-        Guild {id: gid, bottle_channel: None, admin_channel: None}
+        Guild {id: gid, bottle_channel: None, public: false, admin_channel: None}
     }
 }
 

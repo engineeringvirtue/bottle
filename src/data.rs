@@ -51,6 +51,10 @@ impl User {
     pub fn from_session(ses:Uuid, conn:&Conn) -> Res<Self> {
         user::table.filter(user::session.eq(ses)).first(conn)
     }
+
+    pub fn get_contributions(&self, limit:i64, conn:&Conn) -> Res<Vec<GuildContribution>> {
+        guild_contribution::table.filter(guild_contribution::user.eq(self.id)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
+    }
 }
 
 impl Guild {
@@ -64,6 +68,10 @@ impl Guild {
 
     pub fn get_last_bottle(&self, conn:&Conn) -> Res<GuildBottle> {
         GuildBottle::belonging_to(self).order(guild_bottle::time_recieved.desc()).first(conn)
+    }
+
+    pub fn get_contributions(&self, limit:i64, conn:&Conn) -> Res<Vec<GuildContribution>> {
+        guild_contribution::table.filter(guild_contribution::guild.eq(self.id)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
     }
 
     pub fn del(gid: GuildId, conn:&Conn) -> Res<usize> {
@@ -128,20 +136,13 @@ impl GuildBottle {
 }
 
 impl GuildContribution {
-    pub fn get(id: GuildContributionId, conn:&Conn) -> Res<Self> {
-        guild_contribution::table.find(id).first(conn)
+    pub fn get(id: GuildContributionId, conn:&Conn) -> Self {
+        guild_contribution::table.find(id).first(conn).unwrap_or_else(|_| GuildContribution {guild: id.0, user: id.1, xp: 0})
     }
 
     pub fn update(&self, conn:&Conn) -> Res<Self> {
-        insert_into(guild_contribution::table).values(self).on_conflict(guild_contribution::all_columns).do_update().set(self).get_result(conn)
-    }
-
-    pub fn get_from_user(u: UserId, limit:i64, conn:&Conn) -> Res<Vec<Self>> {
-        guild_contribution::table.filter(guild_contribution::user.eq(u)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
-    }
-
-    pub fn get_from_guild(g: GuildId, limit:i64, conn:&Conn) -> Res<Vec<Self>> {
-        guild_contribution::table.filter(guild_contribution::guild.eq(g)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
+        insert_into(guild_contribution::table).values(self)
+            .on_conflict((guild_contribution::guild, guild_contribution::user)).do_update().set(self).get_result(conn)
     }
 
     pub fn get_guild_xp(g:GuildId, conn:&Conn) -> Res<Option<i64>> {

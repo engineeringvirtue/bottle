@@ -1,5 +1,6 @@
 CREATE TABLE "guild" (
 	"id" bigint NOT NULL,
+	"public" bool NOT NULL DEFAULT 'false',
 	"bottle_channel" bigint UNIQUE,
 	"admin_channel" bigint UNIQUE,
 	CONSTRAINT guild_pk PRIMARY KEY ("id")

@@ -9,7 +9,7 @@ use iron::prelude::*;
 use iron::{BeforeMiddleware, AfterMiddleware, AroundMiddleware, status, modifiers::{RedirectRaw, Redirect}};
 use iron_sessionstorage_0_6::traits::*;
 use iron_sessionstorage_0_6::{Session, SessionStorage, backends::SignedCookieBackend};
-use handlebars_iron::{Template, handlebars::Context, HandlebarsEngine, DirectorySource};
+use handlebars_iron::{Template, HandlebarsEngine, DirectorySource};
 use router::{Router, NoRoute};
 use staticfile::Static;
 use mount::Mount;
@@ -124,8 +124,14 @@ struct BottlePage {
 }
 
 #[derive(Deserialize, Serialize)]
+struct UserContribution {guild: String, xp: i32}
+#[derive(Deserialize, Serialize)]
 struct UserPage {
-    tag: String, admin: bool, pfp: String, xp: i32, ranked: i64, num_bottles: i64, recent_bottles: Vec<BottlePage>
+    tag: String, admin: bool, pfp: String, xp: i32, ranked: i64, num_bottles: i64, contributions: Vec<UserContribution>, recent_bottles: Vec<BottlePage>
+}
+
+fn get_guild_name(id: GuildId) -> String {
+    id::GuildId(id as u64).to_partial_guild().ok().map(|x: guild::PartialGuild| x.name).unwrap_or("Guild not found".to_owned())
 }
 
 fn get_user_data(uid: UserId, conn: &Conn) -> Res<UserPage> {
@@ -138,12 +144,15 @@ fn get_user_data(uid: UserId, conn: &Conn) -> Res<UserPage> {
         xp: udata.xp,
         ranked: udata.get_ranking(conn)?,
         num_bottles: udata.get_num_bottles(conn)?,
-        recent_bottles: udata.get_last_bottles(5, conn)?.into_iter().map(|bottle| {
+        contributions: udata.get_contributions(5, conn)?.into_iter().map(|c| {
+            UserContribution {guild: get_guild_name(c.guild), xp: c.xp}
+        }).collect(),
+        recent_bottles: udata.get_last_bottles(10, conn)?.into_iter().map(|bottle| {
             BottlePage {
                 contents: bottle.contents,
                 time_pushed: bottle.time_pushed.format(&"%m/%d/%y - %H:%M").to_string(),
                 image: bottle.image,
-                guild: bottle.guild.and_then(|x| id::GuildId(x as u64).to_partial_guild().ok()).map(|x: guild::PartialGuild| x.name)
+                guild: bottle.guild.map(get_guild_name)
             }
         }).collect()
     };
