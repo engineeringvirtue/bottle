@@ -38,6 +38,14 @@ table! {
 }
 
 table! {
+    guild_contribution (guild, user) {
+        guild -> Int8,
+        user -> Int8,
+        xp -> Int4,
+    }
+}
+
+table! {
     report (bottle) {
         bottle -> Int8,
         message -> Int8,
@@ -60,6 +68,8 @@ joinable!(bottle -> guild (guild));
 joinable!(bottle -> user (user));
 joinable!(guild_bottle -> bottle (bottle));
 joinable!(guild_bottle -> guild (guild));
+joinable!(guild_contribution -> guild (guild));
+joinable!(guild_contribution -> user (user));
 joinable!(report -> bottle (bottle));
 joinable!(report -> user (user));
 
@@ -68,6 +78,7 @@ allow_tables_to_appear_in_same_query!(
     bottle,
     guild,
     guild_bottle,
+    guild_contribution,
     report,
     user,
 );

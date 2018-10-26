@@ -31,6 +31,7 @@ pub type BottleId = i64;
 pub type GuildId = i64;
 pub type UserId = i64;
 pub type GuildBottleId = i64;
+pub type GuildContributionId = (GuildId, UserId);
 pub type ReportId = i64;
 
 #[derive(Insertable)]
@@ -107,6 +108,14 @@ pub struct GuildBottle {
     pub guild: GuildId,
     pub message: i64,
     pub time_recieved: DTime
+}
+
+#[derive(Queryable, Insertable, AsChangeset)]
+#[table_name="guild_contribution"]
+pub struct GuildContribution {
+    pub guild: GuildId,
+    pub user: UserId,
+    pub xp: i32
 }
 
 impl User {

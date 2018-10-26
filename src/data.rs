@@ -127,6 +127,28 @@ impl GuildBottle {
     }
 }
 
+impl GuildContribution {
+    pub fn get(id: GuildContributionId, conn:&Conn) -> Res<Self> {
+        guild_contribution::table.find(id).first(conn)
+    }
+
+    pub fn update(&self, conn:&Conn) -> Res<Self> {
+        insert_into(guild_contribution::table).values(self).on_conflict(guild_contribution::all_columns).do_update().set(self).get_result(conn)
+    }
+
+    pub fn get_from_user(u: UserId, limit:i64, conn:&Conn) -> Res<Vec<Self>> {
+        guild_contribution::table.filter(guild_contribution::user.eq(u)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
+    }
+
+    pub fn get_from_guild(g: GuildId, limit:i64, conn:&Conn) -> Res<Vec<Self>> {
+        guild_contribution::table.filter(guild_contribution::guild.eq(g)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
+    }
+
+    pub fn get_guild_xp(g:GuildId, conn:&Conn) -> Res<Option<i64>> {
+        guild_contribution::table.filter(guild_contribution::guild.eq(g)).select(dsl::sum(guild_contribution::xp)).first(conn)
+    }
+}
+
 impl Report {
     pub fn make(&self, conn:&Conn) -> Res<Self> {
         insert_into(report::table).values(self).get_result(conn)

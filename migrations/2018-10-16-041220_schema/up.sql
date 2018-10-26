@@ -52,7 +52,14 @@ CREATE TABLE "guild_bottle" (
   OIDS=FALSE
 );
 
-
+CREATE TABLE "guild_contribution" (
+	"guild" bigint NOT NULL,
+    "user" bigint NOT NULL,
+    "xp" integer NOT NULL,
+    CONSTRAINT guild_contribution_pk PRIMARY KEY("guild", "user")
+) WITH (
+  OIDS=FALSE
+);
 
 CREATE TABLE "report" (
 	"bottle" bigint NOT NULL UNIQUE,
@@ -63,8 +70,6 @@ CREATE TABLE "report" (
   OIDS=FALSE
 );
 
-
-
 CREATE TABLE "ban" (
 	"report" bigint,
 	"user" bigint NOT NULL,
@@ -73,16 +78,15 @@ CREATE TABLE "ban" (
   OIDS=FALSE
 );
 
-
-
-
 ALTER TABLE "bottle" ADD CONSTRAINT "bottle_fk0" FOREIGN KEY ("reply_to") REFERENCES "bottle"("id") ON DELETE CASCADE;
 ALTER TABLE "bottle" ADD CONSTRAINT "bottle_fk1" FOREIGN KEY ("user") REFERENCES "user"("id");
 ALTER TABLE "bottle" ADD CONSTRAINT "bottle_fk2" FOREIGN KEY ("guild") REFERENCES "guild"("id") ON DELETE SET NULL;
 
-
 ALTER TABLE "guild_bottle" ADD CONSTRAINT "guild_bottle_fk0" FOREIGN KEY ("bottle") REFERENCES "bottle"("id") ON DELETE CASCADE;
 ALTER TABLE "guild_bottle" ADD CONSTRAINT "guild_bottle_fk1" FOREIGN KEY ("guild") REFERENCES "guild"("id") ON DELETE CASCADE;
+
+ALTER TABLE "guild_contribution" ADD CONSTRAINT "guild_contribution_fk0" FOREIGN KEY ("guild") REFERENCES "guild"("id") ON DELETE CASCADE;
+ALTER TABLE "guild_contribution" ADD CONSTRAINT "guild_contribution_fk1" FOREIGN KEY ("user") REFERENCES "user"("id") ON DELETE CASCADE;
 
 ALTER TABLE "report" ADD CONSTRAINT "report_fk0" FOREIGN KEY ("bottle") REFERENCES "bottle"("id") ON DELETE CASCADE;
 ALTER TABLE "report" ADD CONSTRAINT "report_fk1" FOREIGN KEY ("user") REFERENCES "user"("id");
