@@ -7,6 +7,7 @@ use oauth2;
 use iron;
 use iron::prelude::*;
 use iron::{BeforeMiddleware, AfterMiddleware, AroundMiddleware, status, modifiers::{RedirectRaw, Redirect}};
+use iron_sessionstorage_0_6;
 use iron_sessionstorage_0_6::traits::*;
 use iron_sessionstorage_0_6::{Session, SessionStorage, backends::SignedCookieBackend};
 use handlebars_iron::{Template, HandlebarsEngine, DirectorySource};
