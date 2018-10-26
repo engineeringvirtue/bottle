@@ -1,0 +1,27 @@
+.main {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: 10%;
+}
+
+.navbar,
+.footer {
+    flex-basis: 0.2;
+}
+
+.content {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.desc {
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+.bottle {
+    z-index: 1000;
+}
