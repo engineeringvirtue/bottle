@@ -145,7 +145,7 @@ fn main() {
     client.with_framework(StandardFramework::new()
         .configure(|c| c.prefix("-")) // set the bot's prefix to "~"
         .help(|_f, msg, _opts, _cmds, _args | {
-              msg.reply ("Set a bottle channel with ``-configure``, then start sending out and replying to bottles there! Or dm me for anonymous bottles! :^) Also try ``-info``")?;
+              msg.reply ("Set a bottle channel with ``-configure <channel>``, then start sending out and replying to bottles there! Or dm me for anonymous bottles! :^) Also try ``-info``")?;
 
               Ok(())
         })
@@ -198,14 +198,21 @@ fn main() {
                 let guild = guild_channel.read().guild().unwrap();
 
                 guild_channel.read().send_message(|msg| msg.embed(|embed| {
-                    let mut e = embed.title(guild.read().name.clone())
-                        .field("XP", gdata.get_xp(conn).unwrap_or(None).unwrap_or(0), true);
+                    let public = match gdata.invite.as_ref() {
+                        Some(inv) => inv,
+                        None => "Use -publicize to generate an invite!"
+                    };
 
-                    if let Some(inv) = gdata.invite {
-                        e = e.field("Public", inv, true)
-                    }
+                    let bottle_channel = match gdata.bottle_channel.as_ref() {
+                        Some(cid) => serenity::model::id::ChannelId(cid.clone() as u64).mention(),
+                        None => "Set with -configure <channel>".to_owned()
+                    };
 
-                    e.url(guild_url(gdata.id, &ctx.get_cfg()))
+                    embed.title(guild.read().name.clone())
+                        .field("XP", gdata.get_xp(conn).unwrap_or(None).unwrap_or(0), true)
+                        .field("Bottle channel", bottle_channel, true)
+                        .field("Public", public, true)
+                        .url(guild_url(gdata.id, &ctx.get_cfg()))
                 }))?;
 
                 Ok(())

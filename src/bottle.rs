@@ -18,8 +18,8 @@ use data::*;
 use data::functions::random;
 use schema::{guild};
 
-pub fn level_to_col (lvl: usize) -> Colour {
-    match lvl%8 {
+pub fn col_wheel(num: usize) -> Colour {
+    match num%8 {
         0 => Colour::BLURPLE,
         1 => Colour::BLUE,
         2 => Colour::TEAL,
@@ -38,7 +38,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
         let mut e = e.title(title)
             .description(bottle.contents.clone())
             .timestamp(&DateTime::<Utc>::from_utc(bottle.time_pushed, Utc))
-            .color(level_to_col(level))
+            .color(col_wheel(level))
             .field("Report", format!("{}/report/{}", cfg.host_url, bottle.id), true)
             .footer(|footer|
                 if let Some(ref guild) = bottle.guild.and_then(|guild| GuildId(guild as u64).to_partial_guild().ok()) {
