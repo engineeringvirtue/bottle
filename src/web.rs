@@ -119,6 +119,17 @@ impl AfterMiddleware for StatusMiddleware {
     }
 }
 
+pub fn get_guild_name(id: GuildId) -> String {
+    use serenity::model::id::GuildId;
+    GuildId(id as u64).to_guild_cached().map(|x| x.read().name.to_owned())
+        .unwrap_or("Guild not found".to_owned())
+}
+
+pub fn get_user_name(id: UserId) -> String {
+    use serenity::model::id::UserId;
+    UserId(id as u64).to_user().ok().map(|x| x.name).unwrap_or("User not found".to_owned())
+}
+
 #[derive(Deserialize, Serialize)]
 struct BottlePage {
     contents: String, time_pushed: String, image: Option<String>, guild: Option<String>
@@ -136,10 +147,6 @@ struct GuildContribution {user: String, uid: i64, xp: i32}
 #[derive(Deserialize, Serialize)]
 struct GuildPage {
     name: String, pfp: String, invite: Option<String>, xp: i64, ranked: i64, num_bottles: i64, contributions: Vec<GuildContribution>
-}
-
-fn get_user_name(id: UserId) -> String {
-    id::UserId(id as u64).to_user().ok().map(|u| u.name).unwrap_or("User not found".to_owned())
 }
 
 fn get_user_data(uid: UserId, conn: &Conn, cfg: &Config) -> Res<UserPage> {
@@ -178,10 +185,6 @@ fn user(req: &mut Request) -> IronResult<Response> {
         Some(udata) => Ok(Response::with(Template::new("user", &udata))),
         None => Err(IronError::new(ParamError, status::NotFound))
     }
-}
-
-fn get_guild_name(id: GuildId) -> String {
-    id::GuildId(id as u64).to_partial_guild().ok().map(|x| x.name).unwrap_or("Guild not found".to_owned())
 }
 
 fn get_guild_data(gid: GuildId, conn:&Conn, cfg: &Config) -> Res<GuildPage> {
