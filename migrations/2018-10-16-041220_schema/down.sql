@@ -24,9 +24,13 @@ DROP TABLE IF EXISTS "guild";
 
 DROP TABLE IF EXISTS "bottle";
 
+DROP VIEW IF EXISTS "user_rank";
+
 DROP TABLE IF EXISTS "user";
 
 DROP TABLE IF EXISTS "guild_bottle";
+
+DROP VIEW IF EXISTS "guild_rank";
 
 DROP TABLE IF EXISTS "guild_contribution";
 

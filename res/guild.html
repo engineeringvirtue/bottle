@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Bottle | {{ tag }}</title>
+    <title>Bottle | {{ name }}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="/style/main.css">
     <link rel="stylesheet" href="/style/stats.css">
@@ -12,29 +12,23 @@
 </head>
 
 <body>
-    <div class="header" ><img src="{{ pfp }}" class="pfp" /> <h1>{{ tag }}</h1>
-        {{#if admin}}<span class="admin" >ADMIN</span>{{/if}}
-    </div>
+    <div class="header" ><img src="{{ pfp }}" class="pfp" /> <h1>{{ name }}</h1></div>
     <div class="data" >
         <div class="stats" >
             <span class="stat" ><b>{{ xp }}</b> XP</span> <span class="stat" >, ranked #<b>{{ ranked }}</b></span>
-            <br><span class="stat" ><b>{{ num_bottles }}</b> bottles</span>
+            <br><span class="stat" ><b>{{ num_bottles }}</b> bottles recieved</span>
+
+            {{#if invite}}
+                <br><a class="invite" href="{{ invite }}" >Join!</a>
+            {{/if}}
 
             <div class="recent contributions" >
                 {{#each contributions}}
                     {{> contribution}}
                 {{else}}
-                    No contributions by this user!
+                    No contributions to this guild!
                 {{/each}}
             </div>
-        </div>
-
-        <div class="recent" >
-            {{#each recent_bottles}}
-                {{> bottle}}
-            {{else}}
-                No recent bottles have been sent by this user!
-            {{/each}}
         </div>
     </div>
     {{> footer}}

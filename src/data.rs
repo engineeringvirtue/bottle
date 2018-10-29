@@ -39,9 +39,7 @@ impl User {
     }
 
     pub fn get_ranking(&self, conn:&Conn) -> Res<i64> {
-        user::table.select(sql(
-            "1 + (SELECT COUNT(*) FROM \"user\" as compare WHERE compare.xp > \"user\".xp) AS Ranking"
-        )).find(self.id).first(conn)
+        user_rank::table.find(self.id).select(user_rank::rank).first(conn)
     }
 
     pub fn get_banned(&self, conn:&Conn) -> Res<bool> {
@@ -72,6 +70,18 @@ impl Guild {
 
     pub fn get_contributions(&self, limit:i64, conn:&Conn) -> Res<Vec<GuildContribution>> {
         guild_contribution::table.filter(guild_contribution::guild.eq(self.id)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
+    }
+
+    pub fn get_xp(&self, conn:&Conn) -> Res<Option<i64>> {
+        guild_contribution::table.filter(guild_contribution::guild.eq(self.id)).select(dsl::sum(guild_contribution::xp)).first(conn)
+    }
+
+    pub fn get_ranking(&self, conn:&Conn) -> Res<i64> {
+        guild_rank::table.find(self.id).select(guild_rank::rank).first(conn)
+    }
+
+    pub fn get_num_bottles(&self, conn:&Conn) -> Res<i64> {
+        GuildBottle::belonging_to(self).select(dsl::count_star()).first(conn)
     }
 
     pub fn del(gid: GuildId, conn:&Conn) -> Res<usize> {
@@ -143,10 +153,6 @@ impl GuildContribution {
     pub fn update(&self, conn:&Conn) -> Res<Self> {
         insert_into(guild_contribution::table).values(self)
             .on_conflict((guild_contribution::guild, guild_contribution::user)).do_update().set(self).get_result(conn)
-    }
-
-    pub fn get_guild_xp(g:GuildId, conn:&Conn) -> Res<Option<i64>> {
-        guild_contribution::table.filter(guild_contribution::guild.eq(g)).select(dsl::sum(guild_contribution::xp)).first(conn)
     }
 }
 

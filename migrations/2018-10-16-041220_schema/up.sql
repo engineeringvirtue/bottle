@@ -1,14 +1,12 @@
 CREATE TABLE "guild" (
 	"id" bigint NOT NULL,
-	"public" bool NOT NULL DEFAULT 'false',
+	"invite" TEXT,
 	"bottle_channel" bigint UNIQUE,
 	"admin_channel" bigint UNIQUE,
 	CONSTRAINT guild_pk PRIMARY KEY ("id")
 ) WITH (
   OIDS=FALSE
 );
-
-
 
 CREATE TABLE "bottle" (
 	"id" bigserial NOT NULL,
@@ -39,7 +37,7 @@ CREATE TABLE "user" (
   OIDS=FALSE
 );
 
-
+CREATE VIEW "user_rank" AS SELECT ROW_NUMBER() OVER (ORDER BY xp DESC) AS "rank", "id" FROM "user" GROUP BY "id";
 
 CREATE TABLE "guild_bottle" (
 	"id" bigserial NOT NULL,
@@ -61,6 +59,8 @@ CREATE TABLE "guild_contribution" (
 ) WITH (
   OIDS=FALSE
 );
+
+CREATE VIEW "guild_rank" AS SELECT ROW_NUMBER() OVER (ORDER BY SUM(xp) DESC) AS "rank", "guild" AS "id" FROM "guild_contribution" GROUP BY "id";
 
 CREATE TABLE "report" (
 	"bottle" bigint NOT NULL UNIQUE,

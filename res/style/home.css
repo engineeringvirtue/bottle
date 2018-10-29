@@ -1,8 +1,7 @@
 .main {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    margin: 10%;
+    padding: 10%;
 }
 
 .navbar,

@@ -125,28 +125,35 @@ struct BottlePage {
 }
 
 #[derive(Deserialize, Serialize)]
-struct UserContribution {guild: String, xp: i32}
+struct UserContribution {guild: String, gid: i64, xp: i32}
 #[derive(Deserialize, Serialize)]
 struct UserPage {
     tag: String, admin: bool, pfp: String, xp: i32, ranked: i64, num_bottles: i64, contributions: Vec<UserContribution>, recent_bottles: Vec<BottlePage>
 }
 
-fn get_guild_name(id: GuildId) -> String {
-    id::GuildId(id as u64).to_partial_guild().ok().map(|x: guild::PartialGuild| x.name).unwrap_or("Guild not found".to_owned())
+#[derive(Deserialize, Serialize)]
+struct GuildContribution {user: String, uid: i64, xp: i32}
+#[derive(Deserialize, Serialize)]
+struct GuildPage {
+    name: String, pfp: String, invite: Option<String>, xp: i64, ranked: i64, num_bottles: i64, contributions: Vec<GuildContribution>
 }
 
-fn get_user_data(uid: UserId, conn: &Conn) -> Res<UserPage> {
+fn get_user_name(id: UserId) -> String {
+    id::UserId(id as u64).to_user().ok().map(|u| u.name).unwrap_or("User not found".to_owned())
+}
+
+fn get_user_data(uid: UserId, conn: &Conn, cfg: &Config) -> Res<UserPage> {
     let udata = User::get(uid, conn);
     let user = id::UserId(udata.id as u64).to_user()?;
 
     let data = UserPage {
         tag: user.tag(), admin: udata.admin,
-        pfp: user.avatar_url().unwrap_or(ANONYMOUS_AVATAR.to_owned()),
+        pfp: user.avatar_url().unwrap_or_else(|| anonymous_url(cfg)),
         xp: udata.xp,
         ranked: udata.get_ranking(conn)?,
         num_bottles: udata.get_num_bottles(conn)?,
         contributions: udata.get_contributions(5, conn)?.into_iter().map(|c| {
-            UserContribution {guild: get_guild_name(c.guild), xp: c.xp}
+            UserContribution {guild: get_guild_name(c.guild), gid: c.guild, xp: c.xp}
         }).collect(),
         recent_bottles: udata.get_last_bottles(10, conn)?.into_iter().map(|bottle| {
             BottlePage {
@@ -164,14 +171,45 @@ fn get_user_data(uid: UserId, conn: &Conn) -> Res<UserPage> {
 fn user(req: &mut Request) -> IronResult<Response> {
     let udata = req.extensions.get::<Router>().unwrap()
         .find("user").and_then(|x| x.parse().ok()).and_then(|uid| {
-
-        let conn: &Conn = &req.get_conn();
-        get_user_data(uid, conn).ok()
+        get_user_data(uid, &req.get_conn(), &req.get_cfg()).ok()
     });
-
 
     match udata {
         Some(udata) => Ok(Response::with(Template::new("user", &udata))),
+        None => Err(IronError::new(ParamError, status::NotFound))
+    }
+}
+
+fn get_guild_name(id: GuildId) -> String {
+    id::GuildId(id as u64).to_partial_guild().ok().map(|x| x.name).unwrap_or("Guild not found".to_owned())
+}
+
+fn get_guild_data(gid: GuildId, conn:&Conn, cfg: &Config) -> Res<GuildPage> {
+    let gdata = Guild::get(gid, conn);
+    let guild: guild::PartialGuild = id::GuildId(gid as u64).to_partial_guild()?;
+
+    let data = GuildPage {
+        name: guild.name.clone(), invite: gdata.invite.clone(),
+        pfp: guild.icon_url().unwrap_or_else(|| anonymous_url(cfg)).clone(),
+        xp: gdata.get_xp(conn)?.unwrap_or(0),
+        ranked: gdata.get_ranking(conn)?,
+        num_bottles: gdata.get_num_bottles(conn)?,
+        contributions: gdata.get_contributions(15, conn)?.into_iter().map(|c| {
+            GuildContribution {user: get_user_name(c.user), uid: c.user, xp: c.xp}
+        }).collect()
+    };
+
+    Ok(data)
+}
+
+fn guild(req: &mut Request) -> IronResult<Response> {
+    let gdata = req.extensions.get::<Router>().unwrap()
+        .find("guild").and_then(|x| x.parse().ok()).and_then(|gid| {
+        get_guild_data(gid, &req.get_conn(), &req.get_cfg()).ok()
+    });
+
+    match gdata {
+        Some(gdata) => Ok(Response::with(Template::new("guild", &gdata))),
         None => Err(IronError::new(ParamError, status::NotFound))
     }
 }
@@ -308,7 +346,8 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
 
     let mut router = Router::new();
     router.get("/", home, "home");
-    router.get("/:user", user, "user");
+    router.get("/u/:user", user, "user");
+    router.get("/g/:guild", guild, "guild");
     router.get("/report/:bottle", report, "report");
     router.get("/oauth", redirect, "redirect");
 

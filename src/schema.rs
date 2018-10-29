@@ -22,7 +22,7 @@ table! {
 table! {
     guild (id) {
         id -> Int8,
-        public -> Bool,
+        invite -> Nullable<Text>,
         bottle_channel -> Nullable<Int8>,
         admin_channel -> Nullable<Int8>,
     }
@@ -60,6 +60,20 @@ table! {
         session -> Nullable<Uuid>,
         xp -> Int4,
         admin -> Bool,
+    }
+}
+
+table! {
+    user_rank (id) {
+        id -> Int8,
+        rank -> Int8,
+    }
+}
+
+table! {
+    guild_rank (id) {
+        id -> Int8,
+        rank -> Int8,
     }
 }
 

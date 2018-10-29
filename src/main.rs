@@ -145,7 +145,7 @@ fn main() {
     client.with_framework(StandardFramework::new()
         .configure(|c| c.prefix("-")) // set the bot's prefix to "~"
         .help(|_f, msg, _opts, _cmds, _args | {
-              msg.reply ("Set a bottle channel with ``-configure``, then start sending out and replying to bottles there! Or dm me for anonymous bottles! :^)")?;
+              msg.reply ("Set a bottle channel with ``-configure``, then start sending out and replying to bottles there! Or dm me for anonymous bottles! :^) Also try ``-info``")?;
 
               Ok(())
         })
@@ -189,6 +189,43 @@ fn main() {
                 }
             })
         )
+        .command("info", |c|
+            c.guild_only(true).exec(|ctx, msg, args| {
+                let conn = &ctx.get_conn();
+                let gdata = Guild::get(msg.guild_id.unwrap().as_i64(), conn);
+
+                let guild_channel = msg.channel().unwrap().guild().unwrap();
+                let guild = guild_channel.read().guild().unwrap();
+
+                guild_channel.read().send_message(|msg| msg.embed(|embed| {
+                    let mut e = embed.title(guild.read().name.clone())
+                        .field("XP", gdata.get_xp(conn).unwrap_or(None).unwrap_or(0), true);
+
+                    if let Some(inv) = gdata.invite {
+                        e = e.field("Public", inv, true)
+                    }
+
+                    e.url(guild_url(gdata.id, &ctx.get_cfg()))
+                }))?;
+
+                Ok(())
+            })
+        )
+        .command("publicize", |c|
+            c.guild_only(true).exec(|ctx, msg, args| {
+                let conn = &ctx.get_conn();
+                let mut gdata = Guild::get(msg.guild_id.unwrap().as_i64(), conn);
+
+                let guildc = msg.channel().unwrap().guild().unwrap();
+                let inv = guildc.read().create_invite(|x| x.max_age(0).temporary(true))?;
+                gdata.invite = Some(inv.url());
+                gdata.update(conn)?;
+
+                msg.reply("Guild publicized!")?;
+                Ok(())
+            })
+        )
+
         .after(| _ctx, msg, _, res | {
             if let Err(CommandError(str)) = res {
                 msg.reply(&str).ok();

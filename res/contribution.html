@@ -6,6 +6,12 @@
             </b>XP
         </span>
 
-        <span class="guild" >{{ guild }}</span>
+        {{#if guild}}
+        <a class="guild" href="/g/{{ gid }}" >{{ guild }}</a>
+        {{/if}}
+
+        {{#if user}}
+        <a class="guild" href="/u/{{ uid }}" >{{ user }}</a>
+        {{/if}}
     </div>
 </div>

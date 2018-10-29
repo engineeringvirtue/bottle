@@ -58,12 +58,12 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
                     let username = user.as_ref().map(|u| u.tag())
                         .unwrap_or("Error fetching username".to_owned());
 
-                    let avatar = user.as_ref().ok().and_then(|u| u.avatar_url()).unwrap_or(ERROR_AVATAR.to_owned());
+                    let avatar = user.as_ref().ok().and_then(|u| u.avatar_url()).unwrap_or_else(|| error_url(cfg));
 
-                    author.url(&format!("{}/{}", cfg.host_url, bottle.user.to_string()))
+                    author.url(&user_url(bottle.user, cfg))
                         .name(&username).icon_url(&avatar)
                 } else {
-                    author.name("Anonymous").icon_url(&ANONYMOUS_AVATAR)
+                    author.name("Anonymous").icon_url(&anonymous_url(cfg))
                 }
             });
 
@@ -192,7 +192,7 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
     let msgid = new_message.id.as_i64();
     let conn = &connpool.get_conn();
 
-    let mut user = User::get(userid, conn);
+    let user = User::get(userid, conn);
     let lastbottle = user.get_bottle(conn).ok();
     if let Some (ref bottle) = lastbottle {
         let since_push = now().signed_duration_since(bottle.time_pushed);

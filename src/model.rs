@@ -19,10 +19,6 @@ pub const IMAGEXP: i32 = 6;
 pub const REPORTXP: i32 = 20;
 pub const COOLDOWN: i64 = 10;
 
-//sorry github
-pub const ERROR_AVATAR: &str = "https://github.com/engineeringvirtue/bottled-discord/blob/master/assets/fetcherror.png?raw=true";
-pub const ANONYMOUS_AVATAR: &str = "https://github.com/engineeringvirtue/bottled-discord/blob/master/assets/anonymous.png?raw=true";
-
 pub type ConnPool = Pool<ConnectionManager<PgConnection>>;
 pub type Conn = PooledConnection<ConnectionManager<PgConnection>>;
 pub type DTime = chrono::NaiveDateTime;
@@ -80,14 +76,14 @@ pub struct Bottle {
 #[table_name="guild"]
 pub struct Guild {
     pub id: GuildId,
-    pub public: bool,
+    pub invite: Option<String>,
     pub bottle_channel: Option<i64>,
     pub admin_channel: Option<i64>
 }
 
 impl Guild {
     pub fn new (gid: GuildId) -> Guild {
-        Guild {id: gid, bottle_channel: None, public: false, admin_channel: None}
+        Guild {id: gid, bottle_channel: None, invite: None, admin_channel: None}
     }
 }
 
@@ -158,6 +154,22 @@ pub type Res<A> = Result<A, Box<Error>>;
 
 pub fn now() -> chrono::NaiveDateTime {
     chrono::offset::Utc::now().naive_utc()
+}
+
+pub fn user_url(uid: UserId, cfg: &Config) -> String {
+    format!("{}/u/{}", cfg.host_url, uid)
+}
+
+pub fn guild_url(gid: GuildId, cfg: &Config) -> String {
+    format!("{}/g/{}", cfg.host_url, gid)
+}
+
+pub fn anonymous_url(cfg: &Config) -> String {
+    format!("{}/img/anonymous.png", cfg.host_url)
+}
+
+pub fn error_url(cfg: &Config) -> String {
+    format!("{}/img/fetcherror.png", cfg.host_url)
 }
 
 pub struct DConfig;
