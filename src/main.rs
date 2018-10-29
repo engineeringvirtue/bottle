@@ -5,6 +5,8 @@ extern crate r2d2;
 extern crate uuid;
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 extern crate serde;
 extern crate serde_json;
 #[macro_use]
@@ -129,11 +131,15 @@ impl EventHandler for Handler {
     }
 }
 
+embed_migrations!("migrations/");
+
 fn main() {
     kankyo::load_from_reader(&mut File::open("./.env").unwrap()).unwrap();
     let config:Config = envy::from_env::<Config>().unwrap();
     let manager = ConnectionManager::<PgConnection>::new(config.clone().database_url);
     let db = r2d2::Pool::builder().build(manager).expect("Error initializing connection pool.");
+
+    embedded_migrations::run_with_output(&db.get_conn(), &mut std::io::stdout()).unwrap();
 
     let webdb = db.clone(); let webcfg = config.clone();
     thread::spawn( move || web::start_serv(webdb, webcfg));
