@@ -1,4 +1,4 @@
-FROM gentoo/portage
+FROM rust
 
 ADD . /source
 WORKDIR /source
