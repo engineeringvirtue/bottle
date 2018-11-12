@@ -182,7 +182,7 @@ fn user(req: &mut Request) -> IronResult<Response> {
     });
 
     match udata {
-        Some(udata) => Ok(Response::with(Template::new("user", &udata))),
+        Some(udata) => Ok(Response::with((status::Ok, Template::new("user", &udata)))),
         None => Err(IronError::new(ParamError, status::NotFound))
     }
 }
@@ -212,7 +212,7 @@ fn guild(req: &mut Request) -> IronResult<Response> {
     });
 
     match gdata {
-        Some(gdata) => Ok(Response::with(Template::new("guild", &gdata))),
+        Some(gdata) => Ok(Response::with((status::Ok, Template::new("guild", &gdata)))),
         None => Err(IronError::new(ParamError, status::NotFound))
     }
 }
@@ -282,7 +282,7 @@ fn report(req: &mut Request) -> IronResult<Response> {
                     x.update(conn).unwrap();
                 }
 
-                Ok(Response::with(Template::new("reportmade", alreadyexists)))
+                Ok(Response::with((status::Ok, Template::new("reportmade", alreadyexists))))
             },
             None => {
                 let mut oauth = req.extensions.get::<DOauth2>().unwrap().clone()
@@ -335,7 +335,7 @@ fn home(req: &mut Request) -> IronResult<Response> {
         Ok(data)
     })?;
 
-    let resp = Response::with(Template::new("home", &data));
+    let resp = Response::with((status::Ok, Template::new("home", &data)));
     Ok(resp)
 }
 
@@ -366,10 +366,19 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
     chain.link_after(hbse);
 
     let mut mount = Mount::new();
+
     mount.mount("/", chain);
     mount.mount("/style", Static::new("./res/style"));
     mount.mount("/img", Static::new("./res/img"));
 
-    let iron = Iron::new(mount);
+    let main_mount = if cfg!(debug_assertions) {
+        let mut dev_mount = Mount::new();
+        dev_mount.mount("/bottle", mount);
+        dev_mount
+    } else {
+        mount
+    };
+
+    let iron = Iron::new(main_mount);
     let _ = iron.http("0.0.0.0:8080", ).unwrap();
 }
