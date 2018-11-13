@@ -18,6 +18,7 @@ pub const URLXP: i32 = 2;
 pub const IMAGEXP: i32 = 6;
 pub const REPORTXP: i32 = 20;
 pub const COOLDOWN: i64 = 10;
+pub const MIN_CHARS: usize = 10;
 
 pub type ConnPool = Pool<ConnectionManager<PgConnection>>;
 pub type Conn = PooledConnection<ConnectionManager<PgConnection>>;
