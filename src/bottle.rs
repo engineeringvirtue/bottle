@@ -222,7 +222,7 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
     let url = new_message.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
     let image = new_message.attachments.get(0).map(|a: &Attachment| a.url.clone());
 
-    if url.is_none() && image.is_none() && contents.len() < MIN_CHARS {
+    if url.is_none() && image.is_none() && contents.len() < MIN_CHARS && !user.admin {
         return Err("Your bottle cannot be less than 10 characters!".into());
     }
 
