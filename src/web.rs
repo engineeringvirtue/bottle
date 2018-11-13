@@ -288,7 +288,7 @@ fn report(req: &mut Request) -> IronResult<Response> {
                 let mut oauth = req.extensions.get::<DOauth2>().unwrap().clone()
                     .set_state(session.id.to_string());
 
-                set_session(SessionData {redirect: Some(req.url.to_string()), ..session}, req.session());
+                set_session(SessionData {redirect: Some(format!("{}/report/{}", req.get_cfg().host_url, bid)), ..session}, req.session());
                 Ok(Response::with((status::TemporaryRedirect, RedirectRaw (oauth.authorize_url().to_string()))))
             }
         }
