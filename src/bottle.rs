@@ -39,7 +39,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
             .description(bottle.contents.clone())
             .timestamp(&DateTime::<Utc>::from_utc(bottle.time_pushed, Utc))
             .color(col_wheel(level))
-            .field("Report", format!("{}/report/{}", cfg.host_url, bottle.id), true)
+            .field("Report", report_url(bottle.id, cfg), true)
             .footer(|footer|
                 if let Some(ref guild) = bottle.guild.and_then(|guild| GuildId(guild as u64).to_partial_guild().ok()) {
                     let mut f = footer.text(&guild.name);

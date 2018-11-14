@@ -173,6 +173,8 @@ pub fn error_url(cfg: &Config) -> String {
     format!("{}/img/fetcherror.png", cfg.host_url)
 }
 
+pub fn report_url(bid: BottleId, cfg: &Config) -> String { format!("{}/report/{}", cfg.host_url, bid) }
+
 pub struct DConfig;
 impl Key for DConfig {
     type Value = Config;

@@ -15,7 +15,7 @@
     <div class="header" ><img src="{{ pfp }}" class="pfp" /> <h1>{{ name }}</h1></div>
     <div class="data" >
         <div class="stats" >
-            <span class="stat" ><b>{{ xp }}</b> XP</span> <span class="stat" >, ranked #<b>{{ ranked }}</b></span>
+            <span class="stat" ><b>{{ xp }}</b> XP</span> <span class="stat" >, ranked #<b>{{#if ranked}} {{ ranked }} {{else}} ? {{/if}}</b></span>
             <br><span class="stat" ><b>{{ num_bottles }}</b> bottles recieved</span>
 
             {{#if invite}}

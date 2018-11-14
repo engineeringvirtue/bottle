@@ -146,7 +146,7 @@ struct UserPage {
 struct GuildContribution {user: String, uid: i64, xp: i32}
 #[derive(Deserialize, Serialize)]
 struct GuildPage {
-    name: String, pfp: String, invite: Option<String>, xp: i64, ranked: i64, num_bottles: i64, contributions: Vec<GuildContribution>
+    name: String, pfp: String, invite: Option<String>, xp: i64, ranked: Option<i64>, num_bottles: i64, contributions: Vec<GuildContribution>
 }
 
 fn get_user_data(uid: UserId, conn: &Conn, cfg: &Config) -> Res<UserPage> {
@@ -195,7 +195,7 @@ fn get_guild_data(gid: GuildId, conn:&Conn, cfg: &Config) -> Res<GuildPage> {
         name: guild.name.clone(), invite: gdata.invite.clone(),
         pfp: guild.icon_url().unwrap_or_else(|| anonymous_url(cfg)).clone(),
         xp: gdata.get_xp(conn)?.unwrap_or(0),
-        ranked: gdata.get_ranking(conn)?,
+        ranked: gdata.get_ranking(conn).ok(),
         num_bottles: gdata.get_num_bottles(conn)?,
         contributions: gdata.get_contributions(15, conn)?.into_iter().map(|c| {
             GuildContribution {user: get_user_name(c.user), uid: c.user, xp: c.xp}
@@ -288,7 +288,7 @@ fn report(req: &mut Request) -> IronResult<Response> {
                 let mut oauth = req.extensions.get::<DOauth2>().unwrap().clone()
                     .set_state(session.id.to_string());
 
-                set_session(SessionData {redirect: Some(format!("{}/report/{}", req.get_cfg().host_url, bid)), ..session}, req.session());
+                set_session(SessionData {redirect: Some(report_url(bid, &req.get_cfg())), ..session}, req.session());
                 Ok(Response::with((status::TemporaryRedirect, RedirectRaw (oauth.authorize_url().to_string()))))
             }
         }
