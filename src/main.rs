@@ -196,7 +196,7 @@ fn main() {
             })
         )
         .command("info", |c|
-            c.guild_only(true).exec(|ctx, msg, args| {
+            c.guild_only(true).exec(|ctx, msg, _args| {
                 let conn = &ctx.get_conn();
                 let gdata = Guild::get(msg.guild_id.unwrap().as_i64(), conn);
 
@@ -225,7 +225,7 @@ fn main() {
             })
         )
         .command("publicize", |c|
-            c.guild_only(true).exec(|ctx, msg, args| {
+            c.guild_only(true).exec(|ctx, msg, _args| {
                 let conn = &ctx.get_conn();
                 let mut gdata = Guild::get(msg.guild_id.unwrap().as_i64(), conn);
 
@@ -239,7 +239,15 @@ fn main() {
             })
         )
 
-        .after(| _ctx, msg, _, res | {
+        .on_dispatch_error(| _ctx, msg, err | {
+            match err {
+                DispatchError::LackOfPermissions(_) => {
+                    msg.reply("You lack permission to do this! Please make sure you are an administrator.").ok();
+                },
+                _ => ()
+            }
+        })
+        .after(|_ctx, msg, _, res| {
             if let Err(CommandError(str)) = res {
                 msg.reply(&str).ok();
             }

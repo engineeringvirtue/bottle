@@ -81,11 +81,15 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
     Ok(msg)
 }
 
-pub fn distribute_to_guild(bottles: &Vec<Bottle>, guild: &Guild, conn: &Conn, cfg:&Config) -> Res<()> {
+pub fn distribute_to_guild(bottles: &Vec<(usize, Bottle)>, guild: &Guild, conn: &Conn, cfg:&Config) -> Res<()> {
     let bottlechannelid = ChannelId(guild.bottle_channel.ok_or("No bottle channel")? as u64);
 
-    for (i, bottle) in bottles.iter().rev().enumerate() {
-        let msg = render_bottle(bottle, i, bottlechannelid, cfg)?;
+    let last_bottle = guild.get_last_bottle(conn).ok().map(|x| x.bottle);
+    let unrepeated: Vec<&(usize, Bottle)> = bottles.into_iter().take_while(|(_, x)| Some(x.id) != last_bottle).collect();
+
+    for (i, bottle) in unrepeated.into_iter().rev() {
+
+        let msg = render_bottle(&bottle, i.clone(), bottlechannelid, cfg)?;
         MakeGuildBottle {bottle: bottle.id, guild: guild.id, message: msg.id.as_i64(), time_recieved: now()}.make(conn)?;
     }
 
@@ -94,7 +98,7 @@ pub fn distribute_to_guild(bottles: &Vec<Bottle>, guild: &Guild, conn: &Conn, cf
 
 const DELIVERNUM: i64 = 3;
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
-    let bottles = bottle.get_reply_list(conn)?;
+    let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
 
     let mut query = guild::table.into_boxed();
     if let Some(guild) = bottle.guild {
