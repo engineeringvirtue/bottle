@@ -56,7 +56,7 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
                 if bottle.guild.is_some() {
                     let user = UserId(bottle.user as u64).to_user();
                     let username = user.as_ref().map(|u| u.tag())
-                        .unwrap_or("Error fetching username".to_owned());
+                        .unwrap_or_else(|_| "Error fetching username".to_owned());
 
                     let avatar = user.as_ref().ok().and_then(|u| u.avatar_url()).unwrap_or_else(|| error_url(cfg));
 
@@ -89,7 +89,7 @@ pub fn distribute_to_guild(bottles: &Vec<(usize, Bottle)>, guild: &Guild, conn: 
 
     for (i, bottle) in unrepeated.into_iter().rev() {
 
-        let msg = render_bottle(&bottle, i.clone(), bottlechannelid, cfg)?;
+        let msg = render_bottle(&bottle, *i, bottlechannelid, cfg)?;
         MakeGuildBottle {bottle: bottle.id, guild: guild.id, message: msg.id.as_i64(), time_recieved: now()}.make(conn)?;
     }
 
@@ -147,7 +147,7 @@ pub fn del_bottle(bid: BottleId, conn:&Conn) -> Res<()> {
     Ok(())
 }
 
-pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: Config) -> Res<()> {
+pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
     let mid = r.message_id.as_i64();
     let emojiid = match r.emoji {
         ReactionType::Custom {id: emojiid, ..} => *emojiid.as_u64(),
@@ -191,33 +191,45 @@ pub fn give_xp(bottle: &Bottle, xp: i32, conn:&Conn) -> Res<()> {
     Ok(())
 }
 
-pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:Config) -> Res<String> {
+pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:Config) -> Res<Option<String>> {
     let userid = new_message.author.id.as_i64();
     let msgid = new_message.id.as_i64();
     let conn = &connpool.get_conn();
 
-    let user = User::get(userid, conn);
+    let mut user = User::get(userid, conn);
+
     let lastbottle = user.get_bottle(conn).ok();
+    let ticket_res = (|mut user: User, err: String| {
+        user.tickets += 1;
+        user.update(conn)?;
+
+        if user.tickets > MAX_TICKETS {
+            Ok(None)
+        } else {
+            Ok(Some(err))
+        }
+    });
+
     if let Some (ref bottle) = lastbottle {
         let since_push = now().signed_duration_since(bottle.time_pushed);
         let cooldown = Duration::minutes(COOLDOWN);
 
         if since_push < cooldown && !user.admin {
             let towait = cooldown - since_push;
-            return Err(format!("You must wait {} minutes before sending another bottle!", towait.num_minutes()).into())
+            return ticket_res(user, format!("You must wait {} minutes before sending another bottle!", towait.num_minutes()));
         }
     }
 
     if !user.admin && user.get_banned(conn)? {
-        return Err("You are banned from using Bottle! Appeal by dming the global admins!".into());
+        return ticket_res(user, "You are banned from using Bottle! Appeal by dming the global admins!".to_owned());
     }
 
     let mut contents = new_message.content.clone();
     let reply_to = match guild {
-        Some (g) if (&contents).starts_with(REPLY_PREFIX) => {
+        Some(g) if (&contents).starts_with(REPLY_PREFIX) => {
             contents = contents.chars().skip(REPLY_PREFIX.chars().count()).collect();
             let gbottle = Guild::get(g, conn).get_last_bottle(conn).map_err(|_| "No bottle to reply found!")?;
-            Some (gbottle.bottle)
+            Some(gbottle.bottle)
         }, _ => None
     };
 
@@ -227,9 +239,10 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
     let image = new_message.attachments.get(0).map(|a: &Attachment| a.url.clone());
 
     if url.is_none() && image.is_none() && contents.len() < MIN_CHARS && !user.admin {
-        return Err("Your bottle cannot be less than 10 characters!".into());
+        return ticket_res(user, "Your bottle cannot be less than 10 characters!".to_owned());
     }
 
+    user.tickets = 0;
     user.update(conn)?;
 
     let mut xp = 0;
@@ -254,5 +267,5 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
         distribute_bottle(&bottle, &connpool.get_conn(), &cfg).ok();
     });
 
-    Ok("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned())
+    Ok(Some("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned()))
 }

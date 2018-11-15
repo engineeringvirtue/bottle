@@ -60,6 +60,7 @@ table! {
         session -> Nullable<Uuid>,
         xp -> Int4,
         admin -> Bool,
+        tickets -> Int4,
     }
 }
 

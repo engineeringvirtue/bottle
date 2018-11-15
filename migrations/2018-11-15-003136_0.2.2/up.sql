@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "tickets" int NOT NULL DEFAULT 0;

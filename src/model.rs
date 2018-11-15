@@ -18,6 +18,7 @@ pub const URLXP: i32 = 2;
 pub const IMAGEXP: i32 = 6;
 pub const REPORTXP: i32 = 20;
 pub const COOLDOWN: i64 = 10;
+pub const MAX_TICKETS: i32 = 5;
 pub const MIN_CHARS: usize = 10;
 
 pub type ConnPool = Pool<ConnectionManager<PgConnection>>;
@@ -46,13 +47,14 @@ pub struct MakeBottle {
     pub image: Option<String>
 }
 
-#[derive(Queryable, Insertable, AsChangeset, Identifiable, Debug)]
+#[derive(Queryable, Insertable, AsChangeset, Identifiable, Clone)]
 #[table_name="user"]
 pub struct User {
     pub id: UserId,
     pub session: Option<Uuid>,
     pub xp: i32,
-    pub admin: bool
+    pub admin: bool,
+    pub tickets: i32
 }
 
 #[derive(Queryable, Associations, Identifiable, Clone)]
@@ -118,7 +120,7 @@ pub struct GuildContribution {
 
 impl User {
     pub fn new (uid: UserId) -> User {
-        User {id: uid, session: None, xp: 0, admin: false}
+        User {id: uid, session: None, xp: 0, admin: false, tickets: 0}
     }
 }
 

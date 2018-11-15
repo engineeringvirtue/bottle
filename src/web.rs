@@ -122,12 +122,12 @@ impl AfterMiddleware for StatusMiddleware {
 pub fn get_guild_name(id: GuildId) -> String {
     use serenity::model::id::GuildId;
     GuildId(id as u64).to_guild_cached().map(|x| x.read().name.to_owned())
-        .unwrap_or("Guild not found".to_owned())
+        .unwrap_or_else(|| "Guild not found".to_owned())
 }
 
 pub fn get_user_name(id: UserId) -> String {
     use serenity::model::id::UserId;
-    UserId(id as u64).to_user().ok().map(|x| x.name).unwrap_or("User not found".to_owned())
+    UserId(id as u64).to_user().ok().map(|x| x.name).unwrap_or_else(|| "User not found".to_owned())
 }
 
 #[derive(Deserialize, Serialize)]
@@ -226,7 +226,7 @@ struct DUserData {
 
 const GETUSER: &str = "https://discordapp.com/api/users/@me";
 impl DUserData {
-    fn get(access_token: String) -> Res<Self> {
+    fn get(access_token: &str) -> Res<Self> {
         use reqwest;
 
         let res =
@@ -254,7 +254,7 @@ fn get_user(ses: &SessionData, conn: &Conn) -> Option<User> {
 }
 
 fn set_tok(ses: &mut Session, tok: oauth2::Token, conn: &Conn) -> Res<()> {
-    let uid = DUserData::get(tok.access_token)?.id.parse()?;
+    let uid = DUserData::get(&tok.access_token)?.id.parse()?;
     let mut u = User::get(uid, conn);
 
     let sesd = get_session(ses);

@@ -56,44 +56,45 @@ use model::id::*;
 
 const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
 
-fn handle_ev_err (replymsg: &Message, res: Res<String>) {
-    match res {
-        Ok(x) => replymsg.reply(&x).ok(),
-        Err(x) => replymsg.reply(&x.to_string()).ok()
-    };
-}
-
 struct Handler;
 impl EventHandler for Handler {
     fn message(&self, ctx: Context, new_message: Message) {
         if !new_message.author.bot {
             let conn = ctx.get_conn();
 
-            match new_message.channel() {
+            let res = match new_message.channel() {
                 Some(Channel::Guild(ref channel)) => {
                     let channel = channel.read();
                     let gid = channel.guild_id.as_i64();
                     let guilddata = Guild::get(gid, &conn);
 
                     if Some(channel.id.as_i64()) == guilddata.bottle_channel {
-                        handle_ev_err(&new_message, bottle::new_bottle(&new_message, Some(gid), ctx.get_pool(), ctx.get_cfg()))
+                        bottle::new_bottle(&new_message, Some(gid), ctx.get_pool(), ctx.get_cfg())
+                    } else {
+                        Ok(None)
                     }
                 },
 
-                Some(Channel::Private(_)) => handle_ev_err(&new_message, bottle::new_bottle(&new_message, None, ctx.get_pool(), ctx.get_cfg())),
-                _ => ()
+                Some(Channel::Private(_)) => bottle::new_bottle(&new_message, None, ctx.get_pool(), ctx.get_cfg()),
+                _ => Ok(None)
+            };
+
+            match res {
+                Ok(Some(x)) => new_message.reply(&x).ok(),
+                Err(x) => new_message.reply(x.description()).ok(),
+                _ => None
             };
         }
     }
 
     fn reaction_add(&self, ctx: Context, r: Reaction) {
         let conn = &ctx.get_conn();
-        bottle::react(conn, r, true, ctx.get_cfg()).unwrap();
+        bottle::react(conn, r, true, &ctx.get_cfg()).unwrap();
     }
 
     fn reaction_remove(&self, ctx: Context, r: Reaction) {
         let conn = &ctx.get_conn();
-        bottle::react(conn, r, false, ctx.get_cfg()).unwrap();
+        bottle::react(conn, r, false, &ctx.get_cfg()).unwrap();
     }
 
     fn guild_create (&self, ctx: Context, guild: serenity::model::guild::Guild, is_new: bool) {
@@ -210,7 +211,7 @@ fn main() {
                     };
 
                     let bottle_channel = match gdata.bottle_channel.as_ref() {
-                        Some(cid) => serenity::model::id::ChannelId(cid.clone() as u64).mention(),
+                        Some(cid) => serenity::model::id::ChannelId(*cid as u64).mention(),
                         None => "Set with -configure <channel>".to_owned()
                     };
 
