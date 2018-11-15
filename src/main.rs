@@ -226,7 +226,8 @@ fn main() {
             })
         )
         .command("publicize", |c|
-            c.guild_only(true).exec(|ctx, msg, _args| {
+            c.guild_only(true).required_permissions(ADMIN_PERM)
+                .exec(|ctx, msg, _args| {
                 let conn = &ctx.get_conn();
                 let mut gdata = Guild::get(msg.guild_id.unwrap().as_i64(), conn);
 

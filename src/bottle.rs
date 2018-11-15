@@ -199,7 +199,7 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
     let mut user = User::get(userid, conn);
 
     let lastbottle = user.get_bottle(conn).ok();
-    let ticket_res = (|mut user: User, err: String| {
+    let ticket_res = |mut user: User, err: String| {
         user.tickets += 1;
         user.update(conn)?;
 
@@ -208,7 +208,7 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
         } else {
             Ok(Some(err))
         }
-    });
+    };
 
     if let Some (ref bottle) = lastbottle {
         let since_push = now().signed_duration_since(bottle.time_pushed);
