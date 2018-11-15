@@ -150,9 +150,13 @@ fn main() {
     client.data.lock().insert::<DConfig>(config.clone());
 
     client.with_framework(StandardFramework::new()
-        .configure(|c| c.prefix("-")) // set the bot's prefix to "~"
+        .configure(|c| c.prefix("-").dynamic_prefix(|ctx, msg| {
+            let conn = &ctx.get_conn();
+
+            msg.guild_id.and_then(|gid| Guild::get(gid.as_i64(), conn).prefix)
+        }))
         .help(|_f, msg, _opts, _cmds, _args | {
-              msg.reply ("Set a bottle channel with ``-configure <channel>``, then start sending out and replying to bottles there! Or dm me for anonymous bottles! :^) Also try ``-info``")?;
+              msg.reply ("Set a bottle channel with ``-configure <channel>``, then start sending out and replying (prefix your message with ``->`` to bottles there! Or dm me for anonymous bottles! :^) Also try ``-info``")?;
 
               Ok(())
         })
@@ -160,17 +164,25 @@ fn main() {
             c.required_permissions(ADMIN_PERM)
                 .guild_only(true)
                 .exec(| ctx, msg, mut args: serenity::framework::standard::Args | {
-                    let chan = args.single::<serenity::model::channel::Channel>()
-                        .map_err(|_| "Please specify a valid channel.")?;
-
-                    let conn = ctx.get_conn();
-
+                    let conn = &ctx.get_conn();
                     let mut guild = Guild::get(msg.guild_id.unwrap().as_i64(), &conn);
-                    guild.bottle_channel = Some(chan.id().as_i64());
-                    guild.update(&conn)?;
 
-                    msg.reply("All set!")?;
-                    Ok (())
+                    if let Ok(chan) = args.find::<serenity::model::channel::Channel>() {
+                        guild.bottle_channel = Some(chan.id().as_i64());
+                        guild.update(conn)?;
+
+                        msg.reply("All set!")?;
+                        Ok(())
+                    } else if let Ok(x) = args.find::<char>() {
+                        guild.prefix = Some(x.to_string());
+                        guild.update(conn)?;
+
+                        msg.reply(&format!("Set prefix to \"{}\"!", x))?;
+
+                        Ok(())
+                    } else {
+                        Err("Please specify a valid channel or a single character prefix!".into())
+                    }
                 })
         )
         .command("mote", |c|

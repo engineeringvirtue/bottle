@@ -81,12 +81,13 @@ pub struct Guild {
     pub id: GuildId,
     pub invite: Option<String>,
     pub bottle_channel: Option<i64>,
-    pub admin_channel: Option<i64>
+    pub admin_channel: Option<i64>,
+    pub prefix: Option<String>
 }
 
 impl Guild {
     pub fn new (gid: GuildId) -> Guild {
-        Guild {id: gid, bottle_channel: None, invite: None, admin_channel: None}
+        Guild {id: gid, bottle_channel: None, invite: None, admin_channel: None, prefix: None}
     }
 }
 

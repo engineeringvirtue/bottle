@@ -25,6 +25,7 @@ table! {
         invite -> Nullable<Text>,
         bottle_channel -> Nullable<Int8>,
         admin_channel -> Nullable<Int8>,
+        prefix -> Nullable<Bpchar>,
     }
 }
 
@@ -61,20 +62,6 @@ table! {
         xp -> Int4,
         admin -> Bool,
         tickets -> Int4,
-    }
-}
-
-table! {
-    user_rank (id) {
-        id -> Int8,
-        rank -> Int8,
-    }
-}
-
-table! {
-    guild_rank (id) {
-        id -> Int8,
-        rank -> Int8,
     }
 }
 

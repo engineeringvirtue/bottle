@@ -17,6 +17,20 @@ pub mod functions {
 
 use self::functions::*;
 
+table! {
+    user_rank (id) {
+        id -> Int8,
+        rank -> Int8,
+    }
+}
+
+table! {
+    guild_rank (id) {
+        id -> Int8,
+        rank -> Int8,
+    }
+}
+
 impl User {
     pub fn get(uid: UserId, conn:&Conn) -> Self {
         user::table.find(uid).first(conn).unwrap_or_else(|_| User::new(uid))
