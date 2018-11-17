@@ -114,6 +114,14 @@ impl Bottle {
         bottle::table.find(id).get_result(conn)
     }
 
+    pub fn get_from_message(mid: i64, conn: &Conn) -> Res<Bottle> {
+        if let Ok(x) = GuildBottle::get_from_message(mid, conn) {
+            return Bottle::get(x.bottle, conn);
+        }
+
+        bottle::table.filter(bottle::message.eq(mid)).first(conn)
+    }
+
     pub fn del(id:BottleId, conn:&Conn) -> Res<usize> {
         delete(bottle::table).filter(bottle::id.eq(id)).execute(conn)
     }

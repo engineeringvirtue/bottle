@@ -157,7 +157,7 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
     let user = User::get(r.user_id.as_i64(), conn);
 
     if user.admin {
-        if let Ok(gbottle) = GuildBottle::get_from_message(mid, conn) {
+        if let Ok(gbottle) = Bottle::get_from_message(mid, conn) {
             let bottle = Bottle::get(gbottle.bottle, conn)?;
 
             if emojiid == cfg.ban_emoji {
