@@ -14,6 +14,7 @@ extern crate serde_derive;
 extern crate kankyo;
 extern crate envy;
 extern crate typemap;
+extern crate discord_bots;
 #[macro_use]
 extern crate serenity;
 
@@ -55,6 +56,11 @@ use model::*;
 use model::id::*;
 
 const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
+
+fn update_guilds(ctx: &Context) {
+    let stats = discord_bots::PostBotStats::new(discord_bots::ServerCount::Single(cache.read().all_guilds().len()));
+    ctx.get_bots().post_stats(stats).unwrap();
+}
 
 struct Handler;
 impl EventHandler for Handler {
@@ -113,10 +119,13 @@ impl EventHandler for Handler {
         }
 
         guilddata.update(&conn).unwrap();
+        update_guilds(&ctx);
     }
 
     fn guild_delete (&self, ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
         Guild::del(incomplete.id.as_i64(), &ctx.get_conn()).unwrap();
+
+        update_guilds(&ctx);
     }
 
     fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
@@ -145,7 +154,10 @@ fn main() {
     let webdb = db.clone(); let webcfg = config.clone();
     thread::spawn( move || web::start_serv(webdb, webcfg));
 
+    let dbots = Arc::new(discord_bots::Client::new(&config.discord_bots_token));
+
     let mut client = Client::new(&config.token, Handler).expect("Error initializing client.");
+    client.data.lock().insert::<DBots>(dbots);
     client.data.lock().insert::<DConn>(db.clone());
     client.data.lock().insert::<DConfig>(config.clone());
 

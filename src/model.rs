@@ -8,6 +8,7 @@ use uuid::Uuid;
 use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use r2d2::{Pool, PooledConnection};
+use std::sync::Arc;
 
 use super::schema::*;
 
@@ -143,6 +144,7 @@ pub struct Ban {
 #[derive(Clone, Deserialize, Debug)]
 pub struct Config {
     pub token: String,
+    pub discord_bots_token: String,
     pub client_id: String,
     pub client_secret: String,
     pub database_url: String,
@@ -188,6 +190,11 @@ impl Key for DOauth2 {
     type Value = oauth2::Config;
 }
 
+pub struct DBots;
+impl Key for DBots {
+    type Value = Arc<discord_bots::Client>;
+}
+
 pub trait GetConfig {
     fn get_cfg(&self) -> Config;
 }
@@ -224,6 +231,16 @@ impl GetConnection for Pool<ConnectionManager<PgConnection>> {
 impl GetConnection for serenity::prelude::Context {
     fn get_pool(&self) -> ConnPool {
         self.data.lock().get::<DConn>().unwrap().get_pool()
+    }
+}
+
+pub trait GetBots {
+    fn get_bots(&self) -> Arc<discord_bots::Client>;
+}
+
+impl GetBots for serenity::prelude::Context {
+    fn get_bots(&self) -> Arc<discord_bots::Client> {
+        self.data.lock().get::<DBots>().unwrap().clone()
     }
 }
 
