@@ -93,6 +93,7 @@ pub fn distribute_to_guild(bottles: &Vec<(usize, Bottle)>, guild: &Guild, conn: 
         MakeGuildBottle {bottle: bottle.id, guild: guild.id, message: msg.id.as_i64(), time_recieved: now()}.make(conn)?;
     }
 
+    trace!("Delivered bottle to guild {}", &guild.id);
     Ok (())
 }
 
@@ -136,6 +137,8 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
 }
 
 pub fn del_bottle(bid: BottleId, conn:&Conn) -> Res<()> {
+    trace!("Bottle deleted");
+
     for b in GuildBottle::get_from_bottle(bid, conn)? {
         let guild = Guild::get(b.guild, conn);
         if let Some(mut msg) = guild.bottle_channel.and_then(|bchan| ChannelId(bchan as u64).message(MessageId(b.message as u64)).ok()) {
@@ -148,6 +151,8 @@ pub fn del_bottle(bid: BottleId, conn:&Conn) -> Res<()> {
 }
 
 pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
+    trace!("Reaction added: {}", r.emoji.to_string());
+
     let mid = r.message_id.as_i64();
     let emojiid = match r.emoji {
         ReactionType::Custom {id: emojiid, ..} => *emojiid.as_u64(),
@@ -190,6 +195,8 @@ pub fn give_xp(bottle: &Bottle, xp: i32, conn:&Conn) -> Res<()> {
 }
 
 pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:Config) -> Res<Option<String>> {
+    trace!("New bottle found");
+
     let userid = new_message.author.id.as_i64();
     let msgid = new_message.id.as_i64();
     let conn = &connpool.get_conn();
@@ -260,6 +267,7 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
         .make(conn)?;
 
     give_xp(&bottle, xp, conn)?;
+    debug!("Sending bottle: {:?}", &bottle);
 
     thread::spawn(move || {
         distribute_bottle(&bottle, &connpool.get_conn(), &cfg).ok();

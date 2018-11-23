@@ -150,6 +150,8 @@ struct GuildPage {
 }
 
 fn get_user_data(uid: UserId, conn: &Conn, cfg: &Config) -> Res<UserPage> {
+    trace!("Getting user page data for {}", uid);
+
     let udata = User::get(uid, conn);
     let user = id::UserId(udata.id as u64).to_user()?;
 
@@ -188,6 +190,8 @@ fn user(req: &mut Request) -> IronResult<Response> {
 }
 
 fn get_guild_data(gid: GuildId, conn:&Conn, cfg: &Config) -> Res<GuildPage> {
+    trace!("Getting guild page data for {}", gid);
+
     let gdata = Guild::get(gid, conn);
     let guild: guild::PartialGuild = id::GuildId(gid as u64).to_partial_guild()?;
 

@@ -58,7 +58,7 @@ pub struct User {
     pub tickets: i32
 }
 
-#[derive(Queryable, Associations, Identifiable, Clone)]
+#[derive(Queryable, Associations, Identifiable, Clone, Debug)]
 #[table_name="bottle"]
 #[belongs_to(User, foreign_key="user")]
 #[belongs_to(Bottle, foreign_key="reply_to")]
@@ -145,6 +145,7 @@ pub struct Ban {
 pub struct Config {
     pub token: String,
     pub discord_bots_token: String,
+    pub debug_log: bool,
     pub client_id: String,
     pub client_secret: String,
     pub database_url: String,

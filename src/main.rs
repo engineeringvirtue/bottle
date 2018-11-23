@@ -18,6 +18,10 @@ extern crate discord_bots;
 #[macro_use]
 extern crate serenity;
 
+extern crate simple_logging;
+#[macro_use]
+extern crate log;
+
 extern crate iron;
 extern crate handlebars_iron;
 extern crate staticfile;
@@ -26,7 +30,6 @@ extern crate router;
 extern crate params;
 extern crate oauth2;
 extern crate reqwest;
-extern crate bincode;
 extern crate iron_sessionstorage_0_6;
 
 pub mod schema;
@@ -59,7 +62,7 @@ const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
 
 fn update_guilds(ctx: &Context) {
     let stats = discord_bots::PostBotStats::new(discord_bots::ServerCount::Single(cache.read().all_guilds().len()));
-    ctx.get_bots().post_stats(stats).unwrap();
+    ctx.get_bots().post_stats(stats).ok();
 }
 
 struct Handler;
@@ -120,12 +123,14 @@ impl EventHandler for Handler {
 
         guilddata.update(&conn).unwrap();
         update_guilds(&ctx);
+        trace!("Gained guild {}.", &guild.name)
     }
 
     fn guild_delete (&self, ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
         Guild::del(incomplete.id.as_i64(), &ctx.get_conn()).unwrap();
 
         update_guilds(&ctx);
+        trace!("Guild lost.")
     }
 
     fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
@@ -137,11 +142,20 @@ impl EventHandler for Handler {
         u.admin = true;
         u.update(conn).ok();
 
-        println!("Ready!");
+        info!("Client is ready");
     }
 }
 
+#[cfg(not(debug_assertions))]
 embed_migrations!("migrations/");
+
+#[cfg(not(debug_assertions))]
+fn do_migrations(db: &ConnPool) {
+    embedded_migrations::run_with_output(&db.get_conn(), &mut std::io::stdout()).unwrap();
+}
+
+#[cfg(debug_assertions)]
+fn do_migrations(db: &ConnPool) { }
 
 fn main() {
     kankyo::load_from_reader(&mut File::open("./.env").unwrap()).unwrap();
@@ -149,7 +163,12 @@ fn main() {
     let manager = ConnectionManager::<PgConnection>::new(config.clone().database_url);
     let db = r2d2::Pool::builder().build(manager).expect("Error initializing connection pool.");
 
-    embedded_migrations::run_with_output(&db.get_conn(), &mut std::io::stdout()).unwrap();
+    do_migrations(&db);
+
+    let log_level = if config.debug_log { log::LevelFilter::Debug }
+        else { log::LevelFilter::Error };
+
+    simple_logging::log_to_stderr(log_level);
 
     let webdb = db.clone(); let webcfg = config.clone();
     thread::spawn( move || web::start_serv(webdb, webcfg));
