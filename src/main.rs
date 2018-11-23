@@ -61,7 +61,11 @@ use model::id::*;
 const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
 
 fn update_guilds(ctx: &Context) {
-    let stats = discord_bots::PostBotStats::new(discord_bots::ServerCount::Single(cache.read().all_guilds().len()));
+    let guild_count = {
+        cache.read().all_guilds().len()
+    };
+
+    let stats = discord_bots::PostBotStats::new(discord_bots::ServerCount::Single(guild_count));
     ctx.get_bots().post_stats(stats).ok();
 }
 
@@ -109,7 +113,7 @@ impl EventHandler for Handler {
     fn guild_create (&self, ctx: Context, guild: serenity::model::guild::Guild, is_new: bool) {
         let conn = ctx.get_conn();
         let guilddata = Guild::get(guild.id.as_i64(), &conn);
-        let user = &cache.read().user;
+        let user = cache.read().user.id.clone();
 
         if is_new {
             let general = guild.channels.iter()
