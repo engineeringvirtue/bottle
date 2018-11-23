@@ -54,11 +54,11 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
             )
             .author(|author| {
                 if bottle.guild.is_some() {
-                    let user = UserId(bottle.user as u64).to_user();
+                    let user: Result<serenity::model::user::User, serenity::Error> = UserId(bottle.user as u64).to_user();
                     let username = user.as_ref().map(|u| u.tag())
                         .unwrap_or_else(|_| "Error fetching username".to_owned());
 
-                    let avatar = user.as_ref().ok().and_then(|u| u.avatar_url()).unwrap_or_else(|| error_url(cfg));
+                    let avatar = user.as_ref().ok().and_then(|u| u.avatar_url()).unwrap_or_else(|| anonymous_url(cfg));
 
                     author.url(&user_url(bottle.user, cfg))
                         .name(&username).icon_url(&avatar)
