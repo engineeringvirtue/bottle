@@ -3,7 +3,6 @@ use model::*;
 use diesel::prelude::*;
 use schema::*;
 use diesel::*;
-use diesel::dsl::sql;
 use uuid::Uuid;
 
 type Res<A> = Result<A, result::Error>;
@@ -78,10 +77,6 @@ impl Guild {
         insert_into(guild::table).values(self).on_conflict(guild::id).do_update().set(self).execute(conn)
     }
 
-    pub fn get_last_bottle(&self, conn:&Conn) -> Res<GuildBottle> {
-        GuildBottle::belonging_to(self).order(guild_bottle::time_recieved.desc()).first(conn)
-    }
-
     pub fn get_contributions(&self, limit:i64, conn:&Conn) -> Res<Vec<GuildContribution>> {
         guild_contribution::table.filter(guild_contribution::guild.eq(self.id)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
     }
@@ -95,7 +90,8 @@ impl Guild {
     }
 
     pub fn get_num_bottles(&self, conn:&Conn) -> Res<i64> {
-        GuildBottle::belonging_to(self).select(dsl::count_star()).first(conn)
+        let b = self.bottle_channel.ok_or(result::Error::NotFound)?;
+        received_bottle::table.filter(received_bottle::channel.eq(b)).select(dsl::count_star()).first(conn)
     }
 
     pub fn del(gid: GuildId, conn:&Conn) -> Res<usize> {
@@ -115,7 +111,7 @@ impl Bottle {
     }
 
     pub fn get_from_message(mid: i64, conn: &Conn) -> Res<Bottle> {
-        if let Ok(x) = GuildBottle::get_from_message(mid, conn) {
+        if let Ok(x) = ReceivedBottle::get_from_message(mid, conn) {
             return Bottle::get(x.bottle, conn);
         }
 
@@ -143,27 +139,31 @@ impl Bottle {
     }
 }
 
-impl MakeGuildBottle {
-    pub fn make(&self, conn:&Conn) -> Res<GuildBottle> {
-        insert_into(guild_bottle::table).values(self).get_result(conn)
+impl MakeReceivedBottle {
+    pub fn make(&self, conn:&Conn) -> Res<ReceivedBottle> {
+        insert_into(received_bottle::table).values(self).get_result(conn)
     }
 }
 
-impl GuildBottle {
-    pub fn get(buid:GuildBottleId, conn:&Conn) -> Res<Self> {
-        guild_bottle::table.find(buid).get_result(conn)
+impl ReceivedBottle {
+    pub fn get(buid: ReceivedBottleId, conn:&Conn) -> Res<Self> {
+        received_bottle::table.find(buid).get_result(conn)
     }
 
     pub fn get_from_bottle(bid: BottleId, conn:&Conn) -> Res<Vec<Self>> {
-        guild_bottle::table.filter(guild_bottle::bottle.eq(bid)).load(conn)
+        received_bottle::table.filter(received_bottle::bottle.eq(bid)).load(conn)
     }
 
     pub fn get_from_message(mid:i64, conn:&Conn) -> Res<Self> {
-        guild_bottle::table.filter(guild_bottle::message.eq(mid)).get_result(conn)
+        received_bottle::table.filter(received_bottle::message.eq(mid)).get_result(conn)
+    }
+
+    pub fn get_last(channel: i64, conn:&Conn) -> Res<ReceivedBottle> {
+        received_bottle::table.filter(received_bottle::channel.eq(channel)).order(received_bottle::time_recieved.desc()).first(conn)
     }
 
     pub fn del(&self, conn:&Conn) -> Res<usize> {
-        delete(guild_bottle::table.find(self.id)).execute(conn)
+        delete(received_bottle::table.find(self.id)).execute(conn)
     }
 }
 
@@ -181,6 +181,10 @@ impl GuildContribution {
 impl Report {
     pub fn make(&self, conn:&Conn) -> Res<Self> {
         insert_into(report::table).values(self).get_result(conn)
+    }
+
+    pub fn exists(bid: BottleId, conn:&Conn) -> Res<bool> {
+        select(dsl::exists(bottle::table.find(bid))).first(conn)
     }
 
     pub fn get_from_message(mid:i64, conn:&Conn) -> Res<Self> {

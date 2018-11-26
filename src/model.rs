@@ -1,4 +1,3 @@
-use std;
 use serenity;
 use typemap::Key;
 use chrono;
@@ -29,7 +28,7 @@ pub type DTime = chrono::NaiveDateTime;
 pub type BottleId = i64;
 pub type GuildId = i64;
 pub type UserId = i64;
-pub type GuildBottleId = i64;
+pub type ReceivedBottleId = i64;
 pub type GuildContributionId = (GuildId, UserId);
 pub type ReportId = i64;
 
@@ -45,7 +44,9 @@ pub struct MakeBottle {
     pub time_pushed: DTime,
     pub contents: String,
     pub url: Option<String>,
-    pub image: Option<String>
+    pub image: Option<String>,
+
+    pub channel: i64
 }
 
 #[derive(Queryable, Insertable, AsChangeset, Identifiable, Clone)]
@@ -73,10 +74,12 @@ pub struct Bottle {
 
     pub contents: String,
     pub url: Option<String>,
-    pub image: Option<String>
+    pub image: Option<String>,
+
+    pub channel: i64
 }
 
-#[derive(Queryable, Insertable, AsChangeset, Identifiable)]
+#[derive(Queryable, Insertable, AsChangeset, Identifiable, Debug)]
 #[table_name="guild"]
 pub struct Guild {
     pub id: GuildId,
@@ -93,23 +96,22 @@ impl Guild {
 }
 
 #[derive(Insertable)]
-#[table_name="guild_bottle"]
-pub struct MakeGuildBottle {
+#[table_name="received_bottle"]
+pub struct MakeReceivedBottle {
     pub bottle: BottleId,
-    pub guild: GuildId,
+    pub channel: i64,
     pub message: i64,
     pub time_recieved: DTime
 }
 
-#[derive(Queryable, Associations, Identifiable)]
-#[belongs_to(Guild, foreign_key="guild")]
-#[table_name="guild_bottle"]
-pub struct GuildBottle {
-    pub id: GuildBottleId,
+#[derive(Queryable, Identifiable)]
+#[table_name="received_bottle"]
+pub struct ReceivedBottle {
+    pub id: ReceivedBottleId,
     pub bottle: BottleId,
-    pub guild: GuildId,
     pub message: i64,
-    pub time_recieved: DTime
+    pub time_recieved: DTime,
+    pub channel: i64
 }
 
 #[derive(Queryable, Insertable, AsChangeset)]

@@ -5,7 +5,6 @@ extern crate r2d2;
 extern crate uuid;
 #[macro_use]
 extern crate diesel;
-#[macro_use]
 extern crate diesel_migrations;
 extern crate serde;
 extern crate serde_json;
@@ -15,7 +14,6 @@ extern crate kankyo;
 extern crate envy;
 extern crate typemap;
 extern crate discord_bots;
-#[macro_use]
 extern crate serenity;
 
 extern crate simple_logging;
@@ -42,19 +40,16 @@ pub mod bottle;
 use std::thread;
 use std::fs::File;
 use std::sync::{Arc};
-use time::Duration;
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
 
 use serenity::prelude::*;
-use serenity::framework::standard::{Args, CommandError, DispatchError, StandardFramework, HelpBehaviour, CommandOptions, help_commands};
-use serenity::model::channel::{Message, Channel, Embed, Attachment, Reaction};
-use serenity::model::event::*;
+use serenity::framework::standard::{CommandError, DispatchError, StandardFramework};
+use serenity::model::channel::{Message, Channel, Reaction};
 use serenity::model::gateway;
 use serenity::model::permissions::Permissions;
 use serenity::CACHE as cache;
 
-use data::*;
 use model::*;
 use model::id::*;
 
@@ -66,7 +61,7 @@ fn update_guilds(ctx: &Context) {
     };
 
     let stats = discord_bots::PostBotStats::new(discord_bots::ServerCount::Single(guild_count));
-    ctx.get_bots().post_stats(stats).ok();
+    let _ = ctx.get_bots().post_stats(stats);
 }
 
 struct Handler;
@@ -120,8 +115,8 @@ impl EventHandler for Handler {
                 .find(|&(channelid, _)| guild.permissions_in(channelid, user).send_messages());
 
             if let Some((channel, _)) = general {
-                channel.send_message(|x|
-                    x.content("Hey! If you want to receive and send bottles, please set the channel you want to receive them in with ``-configure``. Thanks!")).ok();
+                let _ = channel.send_message(|x|
+                    x.content("Hey! If you want to receive and send bottles, please set the channel you want to receive them in with ``-configure``. Thanks!"));
             }
         }
 
@@ -144,7 +139,7 @@ impl EventHandler for Handler {
         let conn = &ctx.get_conn();
         let mut u = User::get(ctx.get_cfg().auto_admin, conn);
         u.admin = true;
-        u.update(conn).ok();
+        let _ = u.update(conn);
 
         info!("Client is ready");
     }
@@ -159,7 +154,7 @@ fn do_migrations(db: &ConnPool) {
 }
 
 #[cfg(debug_assertions)]
-fn do_migrations(db: &ConnPool) { }
+fn do_migrations(_: &ConnPool) { }
 
 fn main() {
     kankyo::load_from_reader(&mut File::open("./.env").unwrap()).unwrap();
@@ -185,7 +180,8 @@ fn main() {
     client.data.lock().insert::<DConfig>(config.clone());
 
     client.with_framework(StandardFramework::new()
-        .configure(|c| c.prefix("-").dynamic_prefix(|ctx, msg| {
+        .configure(|c| c.on_mention(true)
+            .prefix("-").dynamic_prefix(|ctx, msg| {
             let conn = &ctx.get_conn();
 
             msg.guild_id.and_then(|gid| Guild::get(gid.as_i64(), conn).prefix)
@@ -220,12 +216,18 @@ fn main() {
                     }
                 })
         )
-        .command("mote", |c|
-            c.exec(|ctx, msg, mut args| {
-                let usr = args.single::<serenity::model::user::User>()
-                    .map_err(|_| "Please specify a user to promote.")?;
+        .group("Auto Admin Commands", |g|
+            g.check(|ctx, msg, _args, _opts| {
+                if !ctx.get_cfg().auto_admin == msg.author.id.as_i64() {
+                    let _ = msg.reply("You must be an auto admin to do this!");
+                    false
+                } else { true }
+            })
+            .command("mote", |c|
+                c.exec(|ctx, msg, mut args| {
+                    let usr = args.single::<serenity::model::user::User>()
+                        .map_err(|_| "Please specify a user to promote.")?;
 
-                if ctx.get_cfg().auto_admin == msg.author.id.as_i64() {
                     let conn = &ctx.get_conn();
                     let mut u = User::get(usr.id.as_i64(), conn);
                     if !u.admin {
@@ -238,10 +240,24 @@ fn main() {
 
                     u.update(conn)?;
                     Ok(())
-                } else {
-                    Err("You must be an auto admin to do this!".into())
-                }
-            })
+                })
+            )
+            .command("announce", |c|
+                c.exec(|ctx, msg, args| {
+                    let announcement = args.rest();
+
+                    let conn = &ctx.get_conn();
+                    for x in cache.read().all_guilds() {
+                        if let Some(c) = Guild::get(x.as_i64(), conn).bottle_channel {
+                            let cid = serenity::model::id::ChannelId(c as u64);
+                            let _ = cid.send_message(|x| x.content(announcement));
+                        }
+                    }
+
+                    msg.reply("Sent to all guilds!")?;
+                    Ok(())
+                })
+            )
         )
         .command("info", |c|
             c.guild_only(true).exec(|ctx, msg, _args| {
@@ -263,9 +279,11 @@ fn main() {
                     };
 
                     embed.title(guild.read().name.clone())
+                        .field("Prefix", gdata.prefix.as_ref().map(String::as_str).unwrap_or_else(|| "Use -prefix to set a custom prefix"), true)
                         .field("XP", gdata.get_xp(conn).unwrap_or(None).unwrap_or(0), true)
                         .field("Bottle channel", bottle_channel, true)
                         .field("Public", public, true)
+
                         .url(guild_url(gdata.id, &ctx.get_cfg()))
                 }))?;
 
@@ -291,14 +309,14 @@ fn main() {
         .on_dispatch_error(| _ctx, msg, err | {
             match err {
                 DispatchError::LackOfPermissions(_) => {
-                    msg.reply("You lack permission to do this! Please make sure you are an administrator.").ok();
+                    let _ = msg.reply("You lack permission to do this! Please make sure you are an administrator.");
                 },
                 _ => ()
             }
         })
         .after(|_ctx, msg, _, res| {
             if let Err(CommandError(str)) = res {
-                msg.reply(&str).ok();
+                let _ = msg.reply(&str);
             }
         })
     );

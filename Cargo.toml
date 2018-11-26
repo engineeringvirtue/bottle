@@ -1,6 +1,6 @@
 [package]
 name = "bottle"
-version = "0.3.7"
+version = "1.0.0"
 authors = ["Thomas-QM <thomas@engineeringvirtue.net>"]
 
 [features]

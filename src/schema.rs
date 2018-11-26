@@ -16,6 +16,7 @@ table! {
         contents -> Text,
         url -> Nullable<Text>,
         image -> Nullable<Text>,
+        channel -> Int8,
     }
 }
 
@@ -30,20 +31,20 @@ table! {
 }
 
 table! {
-    guild_bottle (id) {
-        id -> Int8,
-        bottle -> Int8,
-        guild -> Int8,
-        message -> Int8,
-        time_recieved -> Timestamp,
-    }
-}
-
-table! {
     guild_contribution (guild, user) {
         guild -> Int8,
         user -> Int8,
         xp -> Int4,
+    }
+}
+
+table! {
+    received_bottle (id) {
+        id -> Int8,
+        bottle -> Int8,
+        message -> Int8,
+        time_recieved -> Timestamp,
+        channel -> Int8,
     }
 }
 
@@ -69,10 +70,9 @@ joinable!(ban -> report (report));
 joinable!(ban -> user (user));
 joinable!(bottle -> guild (guild));
 joinable!(bottle -> user (user));
-joinable!(guild_bottle -> bottle (bottle));
-joinable!(guild_bottle -> guild (guild));
 joinable!(guild_contribution -> guild (guild));
 joinable!(guild_contribution -> user (user));
+joinable!(received_bottle -> bottle (bottle));
 joinable!(report -> bottle (bottle));
 joinable!(report -> user (user));
 
@@ -80,8 +80,8 @@ allow_tables_to_appear_in_same_query!(
     ban,
     bottle,
     guild,
-    guild_bottle,
     guild_contribution,
+    received_bottle,
     report,
     user,
 );

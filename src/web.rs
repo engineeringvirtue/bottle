@@ -1,12 +1,10 @@
-use std;
 use std::{collections::HashMap, fmt};
-use std::str::{FromStr, from_utf8};
 use uuid::Uuid;
 
 use oauth2;
 use iron;
 use iron::prelude::*;
-use iron::{BeforeMiddleware, AfterMiddleware, AroundMiddleware, status, modifiers::{RedirectRaw, Redirect}};
+use iron::{BeforeMiddleware, AfterMiddleware, status, modifiers::RedirectRaw};
 use iron_sessionstorage_0_6;
 use iron_sessionstorage_0_6::traits::*;
 use iron_sessionstorage_0_6::{Session, SessionStorage, backends::SignedCookieBackend};
@@ -61,7 +59,7 @@ impl fmt::Display for InternalError {
 impl iron::Error for InternalError {}
 
 impl InternalError {
-    fn with<T, F: Fn() -> Res<T>>(f: F) -> IronResult<T> {
+    fn with<T, F: FnMut() -> Res<T>>(mut f: F) -> IronResult<T> {
         f().map_err(|err| {
             IronError::new(InternalError(err.description().to_string()), status::InternalServerError)
         })
@@ -274,19 +272,30 @@ fn report(req: &mut Request) -> IronResult<Response> {
         .ok_or_else(|| IronError::new(ParamError, status::BadRequest))?;
 
     let conn = &req.get_conn();
+
     if let Ok (bottle) = Bottle::get(bid, conn) {
         let session = get_session(req.session());
         match get_user(&session, conn) {
             Some(mut x) => {
-                let msg = bottle::report_bottle(&bottle, x.id, conn, &req.get_cfg()).unwrap();
-                let alreadyexists = Report {user: x.id, bottle: bid, message: msg.id.as_i64()}.make(conn).is_err();
+                let data = InternalError::with(|| {
+                    let alreadyexists = Report::exists(bid, conn)?;
 
-                if !alreadyexists {
-                    x.xp += REPORTXP;
-                    x.update(conn).unwrap();
-                }
+                    if !alreadyexists {
+                        let msg = bottle::report_bottle(&bottle, x.id, conn, &req.get_cfg())?;
+                        Report { user: x.id, bottle: bid, message: msg.id.as_i64() }.make(conn)?;
 
-                Ok(Response::with((status::Ok, Template::new("reportmade", alreadyexists))))
+                        x.xp += REPORTXP;
+                        x.update(conn)?;
+                    }
+
+                    let mut data = HashMap::new();
+                    data.insert("banned", x.get_banned(conn)?);
+                    data.insert("exists", alreadyexists);
+
+                    Ok(data)
+                })?;
+
+                Ok(Response::with((status::Ok, Template::new("reportmade", data))))
             },
             None => {
                 let mut oauth = req.extensions.get::<DOauth2>().unwrap().clone()
