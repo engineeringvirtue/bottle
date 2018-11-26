@@ -105,7 +105,7 @@ const DELIVERNUM: i64 = 3;
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
 
-    let mut reply_channels: Vec<i64> = bottles.iter().skip(1).map(|(_, b)| b.channel).collect();
+    let mut reply_channels: Vec<i64> = bottles.iter().rev().skip(1).map(|(_, b)| b.channel).collect();
     reply_channels.dedup();
 
     let mut query = guild::table.filter(guild::bottle_channel.ne(bottle.channel)).into_boxed();
@@ -133,12 +133,9 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
 
     let bottlemsg: Message = render_bottle(&bottle, 0, channel, cfg)?;
 
-    let ban = ReactionType::Unicode(cfg.ban_emoji.clone());
-    let del = ReactionType::Unicode(cfg.delete_emoji.clone());
-
-    msg.react(ban.clone())?;
-    bottlemsg.react(ban)?;
-    bottlemsg.react(del)?;
+    msg.react(cfg.ban_emoji.as_str())?;
+    bottlemsg.react(cfg.ban_emoji.as_str())?;
+    bottlemsg.react(cfg.delete_emoji.as_str())?;
 
     MakeReceivedBottle {bottle: bottle.id, channel: channel.as_i64(), message: bottlemsg.id.as_i64(), time_recieved: now()}.make(conn)?;
 

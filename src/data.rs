@@ -184,7 +184,7 @@ impl Report {
     }
 
     pub fn exists(bid: BottleId, conn:&Conn) -> Res<bool> {
-        select(dsl::exists(bottle::table.find(bid))).first(conn)
+        select(dsl::exists(report::table.find(bid))).first(conn)
     }
 
     pub fn get_from_message(mid:i64, conn:&Conn) -> Res<Self> {

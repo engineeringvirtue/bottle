@@ -278,9 +278,10 @@ fn report(req: &mut Request) -> IronResult<Response> {
         match get_user(&session, conn) {
             Some(mut x) => {
                 let data = InternalError::with(|| {
+                    let banned = x.get_banned(conn)?;
                     let alreadyexists = Report::exists(bid, conn)?;
 
-                    if !alreadyexists {
+                    if (x.admin || !banned) && !alreadyexists {
                         let msg = bottle::report_bottle(&bottle, x.id, conn, &req.get_cfg())?;
                         Report { user: x.id, bottle: bid, message: msg.id.as_i64() }.make(conn)?;
 
@@ -289,8 +290,8 @@ fn report(req: &mut Request) -> IronResult<Response> {
                     }
 
                     let mut data = HashMap::new();
-                    data.insert("banned", x.get_banned(conn)?);
-                    data.insert("exists", alreadyexists);
+                    data.insert("banned", banned);
+                    data.insert("alreadyexists", alreadyexists);
 
                     Ok(data)
                 })?;

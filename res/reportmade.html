@@ -9,6 +9,8 @@
 </head>
 <body>
     <img src="/bottle/img/check.png" />
-    <p>Thanks for contributing, your report has been made.</p>
+    <p>{{#if alreadyexists}} That report already exists! {{else}}
+        {{#if banned}} You are banned! {{else}}
+            Thanks for contributing, your report has been made. {{/if}}{{/if}}</p>
 </body>
 </html>
