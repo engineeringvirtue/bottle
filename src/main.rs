@@ -96,6 +96,13 @@ impl EventHandler for Handler {
         }
     }
 
+    fn message_delete(&self, ctx: Context, _channel: serenity::model::id::ChannelId, deleted_msg_id: serenity::model::id::MessageId) {
+        let conn = &ctx.get_conn();
+        if let Ok(x) = Bottle::get_from_message(deleted_msg_id.as_i64(), conn) {
+            bottle::del_bottle(x.id, conn).unwrap();
+        }
+    }
+
     fn reaction_add(&self, ctx: Context, r: Reaction) {
         let conn = &ctx.get_conn();
         bottle::react(conn, r, true, &ctx.get_cfg()).unwrap();

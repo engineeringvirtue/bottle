@@ -153,8 +153,8 @@ pub struct Config {
     pub database_url: String,
     pub host_url: String,
     pub admin_channel: i64,
-    pub ban_emoji: u64,
-    pub delete_emoji: u64,
+    pub ban_emoji: String,
+    pub delete_emoji: String,
     pub auto_admin: UserId,
     pub cookie_sig: String
 }

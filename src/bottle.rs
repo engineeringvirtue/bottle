@@ -1,7 +1,6 @@
 use std::thread;
 use chrono::{DateTime, Utc};
-use serenity::model::misc::EmojiIdentifier;
-use serenity::model::id::{ChannelId, UserId, GuildId, EmojiId, MessageId};
+use serenity::model::id::{ChannelId, UserId, GuildId, MessageId};
 use serenity::model::channel::{Message, ReactionType, Reaction, Embed, Attachment};
 use time::Duration;
 use diesel::prelude::*;
@@ -134,12 +133,12 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
 
     let bottlemsg: Message = render_bottle(&bottle, 0, channel, cfg)?;
 
-    let ban = EmojiIdentifier {id: EmojiId(cfg.ban_emoji), name: "ban".to_owned()};
-    let del = EmojiIdentifier {id: EmojiId(cfg.delete_emoji), name: "delete".to_owned()};
+    let ban = ReactionType::Unicode(cfg.ban_emoji.clone());
+    let del = ReactionType::Unicode(cfg.delete_emoji.clone());
 
     msg.react(ban.clone())?;
-    bottlemsg.react(ban.clone())?;
-    bottlemsg.react(del.clone())?;
+    bottlemsg.react(ban)?;
+    bottlemsg.react(del)?;
 
     MakeReceivedBottle {bottle: bottle.id, channel: channel.as_i64(), message: bottlemsg.id.as_i64(), time_recieved: now()}.make(conn)?;
 
@@ -155,7 +154,7 @@ pub fn del_bottle(bid: BottleId, conn:&Conn) -> Res<()> {
         }
     }
 
-//    Bottle::del(bid, conn)?; bwehehehehe
+    Bottle::del(bid, conn)?;
     Ok(())
 }
 
@@ -163,8 +162,9 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
     trace!("Reaction added: {}", r.emoji.to_string());
 
     let mid = r.message_id.as_i64();
-    let emojiid = match r.emoji {
-        ReactionType::Custom {id: emojiid, ..} => *emojiid.as_u64(),
+
+    let emoji_name = match r.emoji {
+        ReactionType::Unicode(x) => x,
         _ => return Ok (())
     };
 
@@ -172,14 +172,14 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
 
     if user.admin {
         if let Ok(bottle) = Bottle::get_from_message(mid, conn) {
-            if emojiid == cfg.ban_emoji {
+            if emoji_name == cfg.ban_emoji {
                 let b = Ban {user: bottle.user, report: None};
                 if add { b.make(conn)?; } else { b.del(conn)?; }
-            } else if emojiid == cfg.delete_emoji && add {
+            } else if emoji_name == cfg.delete_emoji && add {
                 del_bottle(bottle.id, conn)?;
             }
         } else if let Ok(report) = Report::get_from_message(mid, conn) {
-            if emojiid == cfg.ban_emoji {
+            if emoji_name == cfg.ban_emoji {
                 let b = Ban {user: report.user, report: Some(report.bottle)};
                 if add { b.make(conn)?; } else { b.del(conn)?; }
             }
