@@ -102,7 +102,7 @@ pub fn distribute_to_channel(bottles: &Vec<(usize, Bottle)>, channel: i64, conn:
     Ok (())
 }
 
-const DELIVERNUM: i64 = 1;
+const DELIVERNUM: i64 = 3;
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
 
