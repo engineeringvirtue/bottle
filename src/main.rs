@@ -5,6 +5,7 @@ extern crate r2d2;
 extern crate uuid;
 #[macro_use]
 extern crate diesel;
+#[macro_use]
 extern crate diesel_migrations;
 extern crate serde;
 extern crate serde_json;
