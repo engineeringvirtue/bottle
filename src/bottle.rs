@@ -105,7 +105,7 @@ const DELIVERNUM: i64 = 3;
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
 
-    let mut reply_channels: Vec<i64> = bottles.iter().skip(1).map(|(_, b)| b.channel).collect();
+    let mut reply_channels: Vec<i64> = bottles.iter().map(|(_, b)| b.channel).collect();
     reply_channels.dedup();
 
     let mut query = guild::table.into_boxed();
@@ -119,7 +119,7 @@ pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     }
 
     let guilds: Vec<Guild> = query.filter(guild::bottle_channel.is_not_null()).order(random).limit(DELIVERNUM).load(conn)?;
-
+    
     for guild in guilds {
         if let Some(channel) = guild.bottle_channel {
             let _ = distribute_to_channel(&bottles, channel, conn, cfg);
