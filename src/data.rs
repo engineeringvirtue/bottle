@@ -125,7 +125,7 @@ impl Bottle {
     pub fn get_reply_list(&self, conn:&Conn) -> Res<Vec<Self>> {
         let mut bottles: Vec<Bottle> = Vec::new();
 
-        while bottles.len() < 25 {
+        while bottles.len() < 10 {
             match bottles.last().unwrap_or(self).reply_to {
                 Some(x) => {
                     bottles.push(Bottle::get(x, conn)?);

@@ -104,24 +104,16 @@ pub fn distribute_to_channel(bottles: &Vec<(usize, Bottle)>, channel: i64, conn:
 const DELIVERNUM: i64 = 3;
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
+    let guilds: Vec<Guild> =
+        guild::table.filter(guild::bottle_channel.is_not_null())
+            .filter(guild::bottle_channel.ne(bottle.channel)).order(random).limit(DELIVERNUM).load(conn)?;
 
-    let mut reply_channels: Vec<i64> = bottles.iter().map(|(_, b)| b.channel).collect();
-    reply_channels.dedup();
+    let mut channels: Vec<i64> = guilds.iter().filter_map(|x| x.bottle_channel).collect();
+    channels.extend(bottles.iter().map(|(_, b)| b.channel));
+    channels.dedup();
 
-    let mut query = guild::table.into_boxed();
-
-    for x in reply_channels { //distribute and filter
-        if x != bottle.channel {
-            let _ = distribute_to_channel(&bottles, x, conn, cfg);
-        }
-
-        query = query.filter(guild::bottle_channel.ne(x));
-    }
-
-    let guilds: Vec<Guild> = query.filter(guild::bottle_channel.is_not_null()).order(random).limit(DELIVERNUM).load(conn)?;
-    
-    for guild in guilds {
-        if let Some(channel) = guild.bottle_channel {
+    for channel in channels {
+        if channel != bottle.channel {
             let _ = distribute_to_channel(&bottles, channel, conn, cfg);
         }
     }
