@@ -233,7 +233,7 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
 
     let mut contents = new_message.content.clone();
     let reply_to =
-        if (&contents).starts_with(REPLY_PREFIX) {
+        if (&contents).starts_with(REPLY_PREFIX) || (&contents).starts_with("reply") {
             contents = contents.chars().skip(REPLY_PREFIX.chars().count()).collect();
             let rbottle = ReceivedBottle::get_last(channelid, conn).map_err(|_| "No bottle to reply to found!")?;
 
