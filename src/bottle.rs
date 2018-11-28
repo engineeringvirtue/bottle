@@ -232,13 +232,22 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
     }
 
     let mut contents = new_message.content.clone();
-    let reply_to =
-        if (&contents).starts_with(REPLY_PREFIX) || (&contents).starts_with("reply") {
-            contents = contents.chars().skip(REPLY_PREFIX.chars().count()).collect();
-            let rbottle = ReceivedBottle::get_last(channelid, conn).map_err(|_| "No bottle to reply to found!")?;
+    
+    let get_reply_to = || -> Res<Option<i64>> {
+        let rbottle = ReceivedBottle::get_last(channelid, conn).map_err(|_| "No bottle to reply to found!")?;
+        Ok(Some(rbottle.bottle))
+    };
 
-            Some(rbottle.bottle)
-        } else {None};
+    let reply_to =
+        if (&contents).starts_with(REPLY_PREFIX) {
+            contents.drain(..REPLY_PREFIX.len());
+            get_reply_to()?
+        } else if (&contents).starts_with(ALT_REPLY_PREFIX) {
+            contents.drain(..ALT_REPLY_PREFIX.len());
+            get_reply_to()?
+        } else {
+            None
+        };
 
     contents = contents.trim().to_owned();
 

@@ -12,6 +12,7 @@ use std::sync::Arc;
 use super::schema::*;
 
 pub const REPLY_PREFIX: &str = "->";
+pub const ALT_REPLY_PREFIX: &str = "reply";
 pub const PUSHXP: i32 = 15;
 pub const REPLYXP: i32 = 65;
 pub const URLXP: i32 = 2;
