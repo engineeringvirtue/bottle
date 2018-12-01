@@ -99,7 +99,7 @@ impl EventHandler for Handler {
     fn message_delete(&self, ctx: Context, _channel: serenity::model::id::ChannelId, deleted_msg_id: serenity::model::id::MessageId) {
         let conn = &ctx.get_conn();
         if let Ok(x) = Bottle::get_from_message(deleted_msg_id.as_i64(), conn) {
-            bottle::del_bottle(x.id, conn).unwrap();
+            bottle::del_bottle(x.id, conn, &ctx.get_cfg()).unwrap();
         }
     }
 

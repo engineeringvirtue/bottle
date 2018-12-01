@@ -43,6 +43,10 @@ impl User {
         Bottle::belonging_to(self).filter(bottle::guild.is_not_null()).filter(bottle::reply_to.is_null()).order(bottle::time_pushed.desc()).limit(limit).load(conn)
     }
 
+    pub fn get_all_bottles(&self, conn:&Conn) -> Res<Vec<Bottle>> {
+        Bottle::belonging_to(self).load(conn)
+    }
+
     pub fn get_bottle(&self, conn:&Conn) -> Res<Bottle> {
         Bottle::belonging_to(self).order(bottle::time_pushed.desc()).limit(1).first(conn)
     }

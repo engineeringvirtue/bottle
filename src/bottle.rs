@@ -137,12 +137,14 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
     Ok(msg)
 }
 
-pub fn del_bottle(bid: BottleId, conn:&Conn) -> Res<()> {
+pub fn del_bottle(bid: BottleId, conn:&Conn, cfg: &Config) -> Res<()> {
     trace!("Bottle deleted");
 
     for b in ReceivedBottle::get_from_bottle(bid, conn)? {
-        if let Some(mut msg) = ChannelId(b.channel as u64).message(MessageId(b.message as u64)).ok() {
-            let _ = msg.edit(|x| x.embed(|x| x.title("DELETED").description("This bottle has been deleted.")));
+        if b.channel != cfg.admin_channel {
+            if let Some(mut msg) = ChannelId(b.channel as u64).message(MessageId(b.message as u64)).ok() {
+                let _ = msg.edit(|x| x.embed(|x| x.title("DELETED").description("This bottle has been deleted.")));
+            }
         }
     }
 
@@ -162,18 +164,34 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
 
     let user = User::get(r.user_id.as_i64(), conn);
 
+    let ban =
+        |report: Option<ReportId>, user: model::UserId| -> Res<()> {
+            let b = Ban {user, report};
+
+            if add {
+                let u = User::get(user, conn);
+                for x in u.get_all_bottles(conn)? {
+                    del_bottle(x.id, conn, cfg)?;
+                }
+
+                b.make(conn)?;
+            } else {
+                b.del(conn)?;
+            }
+
+            Ok(())
+        };
+
     if user.admin {
         if let Ok(bottle) = Bottle::get_from_message(mid, conn) {
             if emoji_name == cfg.ban_emoji {
-                let b = Ban {user: bottle.user, report: None};
-                if add { b.make(conn)?; } else { b.del(conn)?; }
+                ban(None, bottle.user)?;
             } else if emoji_name == cfg.delete_emoji && add {
-                del_bottle(bottle.id, conn)?;
+                del_bottle(bottle.id, conn, cfg)?;
             }
         } else if let Ok(report) = Report::get_from_message(mid, conn) {
             if emoji_name == cfg.ban_emoji {
-                let b = Ban {user: report.user, report: Some(report.bottle)};
-                if add { b.make(conn)?; } else { b.del(conn)?; }
+                ban(Some(report.bottle), report.user)?;
             }
         }
     }
@@ -223,7 +241,7 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
 
         if since_push < cooldown && !user.admin {
             let towait = cooldown - since_push;
-            return ticket_res(user, format!("You must wait {} minutes before sending another bottle!", towait.num_minutes()));
+            return ticket_res(user, format!("You must wait {} seconds before sending another bottle!", towait.num_seconds()));
         }
     }
 
