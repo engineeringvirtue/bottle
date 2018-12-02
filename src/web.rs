@@ -345,7 +345,7 @@ fn home(req: &mut Request) -> IronResult<Response> {
         let mut data = HashMap::new();
         data.insert("bottlecount", get_bottle_count(&conn).map_err(Box::new)?);
         data.insert("usercount", get_user_count(&conn)?);
-        data.insert("guildcount", get_guild_count(&conn)?);
+        data.insert("guildcount", serenity::CACHE.read().all_guilds().len() as i64);
         Ok(data)
     })?;
 

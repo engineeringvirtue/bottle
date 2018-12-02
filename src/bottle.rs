@@ -91,6 +91,15 @@ pub fn distribute_to_channel(bottles: &Vec<(usize, Bottle)>, channel: i64, conn:
     let last_bottle = ReceivedBottle::get_last(channel, conn).ok().map(|x| x.bottle);
     let unrepeated: Vec<&(usize, Bottle)> = bottles.into_iter().take_while(|(_, x)| Some(x.id) != last_bottle).collect();
 
+    if let Some(x) = last_bottle {
+        if unrepeated.len() > 0
+            && Bottle::in_reply_to(x, conn)? == 0 {
+
+            let b = Bottle::get(x, conn)?;
+            distribute_bottle(&b, conn, cfg)?;
+        }
+    }
+
     for (i, bottle) in unrepeated.into_iter().rev() {
 
         let msg = render_bottle(&bottle, *i, bottlechannelid, cfg)?;

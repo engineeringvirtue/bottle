@@ -122,6 +122,10 @@ impl Bottle {
         bottle::table.filter(bottle::message.eq(mid)).first(conn)
     }
 
+    pub fn in_reply_to(id: BottleId, conn:&Conn) -> Res<i64> {
+         bottle::table.filter(bottle::reply_to.eq(id)).select(dsl::count_star()).first(conn)
+    }
+
     pub fn del(id:BottleId, conn:&Conn) -> Res<usize> {
         delete(bottle::table).filter(bottle::id.eq(id)).execute(conn)
     }
@@ -216,8 +220,4 @@ pub fn get_bottle_count (conn: &Conn) -> Res<i64> {
 
 pub fn get_user_count (conn: &Conn) -> Res<i64> {
     select(estimate_rows("user".to_owned())).get_result(conn)
-}
-
-pub fn get_guild_count (conn: &Conn) -> Res<i64> {
-    select(estimate_rows("guild".to_owned())).get_result(conn)
 }
