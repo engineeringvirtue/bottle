@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, sync::Arc};
 use uuid::Uuid;
 
 use oauth2;
@@ -9,6 +9,8 @@ use iron_sessionstorage_0_6;
 use iron_sessionstorage_0_6::traits::*;
 use iron_sessionstorage_0_6::{Session, SessionStorage, backends::SignedCookieBackend};
 use handlebars_iron::{Template, HandlebarsEngine, DirectorySource};
+#[cfg(feature = "watch")]
+use handlebars_iron::Watchable;
 use router::{Router, NoRoute};
 use staticfile::Static;
 use mount::Mount;
@@ -134,17 +136,17 @@ struct BottlePage {
 }
 
 #[derive(Deserialize, Serialize)]
-struct UserContribution {guild: String, gid: i64, xp: i32}
+struct GuildContribution {guild: String, gid: i64, xp: i64}
 #[derive(Deserialize, Serialize)]
 struct UserPage {
-    tag: String, admin: bool, pfp: String, xp: i32, ranked: i64, num_bottles: i64, contributions: Vec<UserContribution>, recent_bottles: Vec<BottlePage>
+    tag: String, admin: bool, pfp: String, xp: i32, ranked: i64, num_bottles: i64, contributions: Vec<GuildContribution>, recent_bottles: Vec<BottlePage>
 }
 
 #[derive(Deserialize, Serialize)]
-struct GuildContribution {user: String, uid: i64, xp: i32}
+struct UserContribution {user: String, uid: i64, xp: i64}
 #[derive(Deserialize, Serialize)]
 struct GuildPage {
-    name: String, pfp: String, invite: Option<String>, xp: i64, ranked: Option<i64>, num_bottles: i64, contributions: Vec<GuildContribution>
+    name: String, pfp: String, invite: Option<String>, xp: i64, ranked: Option<i64>, num_bottles: i64, contributions: Vec<UserContribution>
 }
 
 fn get_user_data(uid: UserId, conn: &Conn, cfg: &Config) -> Res<UserPage> {
@@ -160,7 +162,7 @@ fn get_user_data(uid: UserId, conn: &Conn, cfg: &Config) -> Res<UserPage> {
         ranked: udata.get_ranking(conn)?,
         num_bottles: udata.get_num_bottles(conn)?,
         contributions: udata.get_contributions(5, conn)?.into_iter().map(|c| {
-            UserContribution {guild: get_guild_name(c.guild), gid: c.guild, xp: c.xp}
+            GuildContribution {guild: get_guild_name(c.guild), gid: c.guild, xp: c.xp as i64}
         }).collect(),
         recent_bottles: udata.get_last_bottles(10, conn)?.into_iter().map(|bottle| {
             BottlePage {
@@ -196,11 +198,11 @@ fn get_guild_data(gid: GuildId, conn:&Conn, cfg: &Config) -> Res<GuildPage> {
     let data = GuildPage {
         name: guild.name.clone(), invite: gdata.invite.clone(),
         pfp: guild.icon_url().unwrap_or_else(|| anonymous_url(cfg)).clone(),
-        xp: gdata.get_xp(conn)?.unwrap_or(0),
+        xp: gdata.get_xp(conn)?,
         ranked: gdata.get_ranking(conn).ok(),
         num_bottles: gdata.get_num_bottles(conn)?,
         contributions: gdata.get_contributions(15, conn)?.into_iter().map(|c| {
-            GuildContribution {user: get_user_name(c.user), uid: c.user, xp: c.xp}
+            UserContribution {user: get_user_name(c.user), uid: c.user, xp: c.xp as i64}
         }).collect()
     };
 
@@ -338,19 +340,44 @@ fn redirect(req: &mut Request) -> IronResult<Response> {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+struct HomePage {
+    bottle_count: i64,
+    user_count: i64,
+    guild_count: usize,
+
+    guild_leaderboard: Vec<GuildContribution>,
+    user_leaderboard: Vec<UserContribution>
+}
+
 fn home(req: &mut Request) -> IronResult<Response> {
     let conn: &Conn = &req.get_conn();
 
     let data = InternalError::with(|| {
-        let mut data = HashMap::new();
-        data.insert("bottlecount", get_bottle_count(&conn).map_err(Box::new)?);
-        data.insert("usercount", get_user_count(&conn)?);
-        data.insert("guildcount", serenity::CACHE.read().all_guilds().len() as i64);
-        Ok(data)
+        Ok(HomePage {
+            bottle_count: get_bottle_count(conn).map_err(Box::new)?,
+            user_count: get_user_count(conn)?,
+            guild_count: serenity::CACHE.read().all_guilds().len(),
+
+            guild_leaderboard: Guild::get_top(10, conn)?
+                .into_iter().map(|x| GuildContribution {gid: x.id, guild: get_guild_name(x.id), xp: x.get_xp(conn).unwrap_or(0)}).collect(),
+            user_leaderboard: User::get_top(10, conn)?
+                .into_iter().map(|x| UserContribution {uid: x.id, user: get_user_name(x.id), xp: x.xp as i64}).collect(),
+        })
     })?;
 
     let resp = Response::with((status::Ok, Template::new("home", &data)));
     Ok(resp)
+}
+
+#[cfg(feature = "watch")]
+fn watch_serv(hbse: &Arc<HandlebarsEngine>) {
+    hbse.watch("./res/");
+}
+
+#[cfg(not(feature = "watch"))]
+fn watch_serv(_: &Arc<HandlebarsEngine>) {
+    ()
 }
 
 pub fn start_serv (db: ConnPool, cfg: Config) {
@@ -374,10 +401,13 @@ pub fn start_serv (db: ConnPool, cfg: Config) {
     hbse.add(Box::new(DirectorySource::new("./res/", ".html")));
     hbse.reload().unwrap();
 
+    let hbse_r = Arc::new(hbse);
+    watch_serv(&hbse_r);
+
     chain.link_around(SessionStorage::new(SignedCookieBackend::new(cfg.cookie_sig.into_bytes())));
     chain.link_before(PrerequisiteMiddleware {pool: db, oauth: oauthcfg, cfg: reqcfg});
     chain.link_after(StatusMiddleware);
-    chain.link_after(hbse);
+    chain.link_after(hbse_r);
 
     let mut mount = Mount::new();
 

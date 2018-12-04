@@ -30,9 +30,20 @@ table! {
     }
 }
 
+allow_tables_to_appear_in_same_query!(guild, guild_rank);
+joinable!(guild_rank -> guild (id));
+
+allow_tables_to_appear_in_same_query!(user, user_rank);
+joinable!(user_rank -> user (id));
+
 impl User {
     pub fn get(uid: UserId, conn:&Conn) -> Self {
         user::table.find(uid).first(conn).unwrap_or_else(|_| User::new(uid))
+    }
+
+    pub fn get_top(limit: i64, conn: &Conn) -> Res<Vec<Self>> {
+        user_rank::table.inner_join(user::table).order_by(user_rank::rank.desc())
+            .select(user::all_columns).limit(limit).load(conn)
     }
 
     pub fn update(&self, conn:&Conn) -> Res<usize> {
@@ -77,6 +88,11 @@ impl Guild {
         guild::table.find(gid).first(conn).unwrap_or_else(|_| Guild::new(gid))
     }
 
+    pub fn get_top(limit: i64, conn: &Conn) -> Res<Vec<Self>> {
+        guild_rank::table.inner_join(guild::table).order_by(guild_rank::rank.desc())
+            .select(guild::all_columns).limit(limit).load(conn)
+    }
+
     pub fn update(&self, conn:&Conn) -> Res<usize> {
         insert_into(guild::table).values(self).on_conflict(guild::id).do_update().set(self).execute(conn)
     }
@@ -85,8 +101,11 @@ impl Guild {
         guild_contribution::table.filter(guild_contribution::guild.eq(self.id)).order(guild_contribution::xp.desc()).limit(limit).load(conn)
     }
 
-    pub fn get_xp(&self, conn:&Conn) -> Res<Option<i64>> {
-        guild_contribution::table.filter(guild_contribution::guild.eq(self.id)).select(dsl::sum(guild_contribution::xp)).first(conn)
+    pub fn get_xp(&self, conn:&Conn) -> Res<i64> {
+        let x: Option<i64> =
+            guild_contribution::table.filter(guild_contribution::guild.eq(self.id)).select(dsl::sum(guild_contribution::xp)).first(conn)?;
+
+        Ok(x.unwrap_or(0))
     }
 
     pub fn get_ranking(&self, conn:&Conn) -> Res<i64> {

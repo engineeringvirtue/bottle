@@ -5,6 +5,7 @@ extern crate r2d2;
 extern crate uuid;
 #[macro_use]
 extern crate diesel;
+#[cfg(not(debug_assertions))]
 #[macro_use]
 extern crate diesel_migrations;
 extern crate serde;
@@ -271,6 +272,7 @@ fn main() {
             c.guild_only(true).exec(|ctx, msg, _args| {
                 let conn = &ctx.get_conn();
                 let gdata = Guild::get(msg.guild_id.unwrap().as_i64(), conn);
+                let gdata_xp = gdata.get_xp(conn)?;
 
                 let guild_channel = msg.channel().unwrap().guild().unwrap();
                 let guild = guild_channel.read().guild().unwrap();
@@ -288,7 +290,7 @@ fn main() {
 
                     embed.title(guild.read().name.clone())
                         .field("Prefix", gdata.prefix.as_ref().map(String::as_str).unwrap_or_else(|| "Use -prefix to set a custom prefix"), true)
-                        .field("XP", gdata.get_xp(conn).unwrap_or(None).unwrap_or(0), true)
+                        .field("XP", gdata_xp, true)
                         .field("Bottle channel", bottle_channel, true)
                         .field("Public", public, true)
 

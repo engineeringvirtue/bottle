@@ -47,16 +47,8 @@ b {
 .bottle {
     padding: 2%;
     margin: 1%;
-    background: #0f4172;
+    background: #70b7ff3d;
     box-shadow: rgba(0, 0, 0, 0.3) 0 0 50px;
-}
-
-.contribution {
-    padding: 5%;
-    margin: 2%;
-    background: #720f1c;
-    box-shadow: rgba(0, 0, 0, 0.3) 0 0 50px;
-    word-wrap: break-word;
 }
 
 .main {

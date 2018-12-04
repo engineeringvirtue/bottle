@@ -29,7 +29,7 @@
             <h1>Bottle</h1>
             <p>A discord bot. <b>Send out your message in a bottle out into a sea of servers</b>. Have it be heard, and &ldquo;improved&rdquo; on. Inspired by Reddit and the "Bottled" app, except discordified.</p>
 
-            <div class="stats">{{ bottlecount }} bottles, {{ usercount }} active users, and {{ guildcount }} servers.</div>
+            <div class="stats">{{ bottle_count }} bottles, {{ user_count }} active users, and {{ guild_count }} servers.</div>
             <br>
             <a href="https://discordapp.com/api/oauth2/authorize?client_id=500548548224352258&permissions=0&scope=bot" >Invite pls, thx.</a>
             <h1>Why?</h1>
@@ -46,9 +46,23 @@
             </a>
 
             <h3><a href="https://github.com/engineeringvirtue/bottled-discord" >Github</a> / <a href="https://discord.gg/8pK5sAY" >Discord</a></h3>
-
         </div>
         <div class="bottle"><img id="bottle" src="/bottle/img/bottle.png"></div>        
+    </div>
+
+    <h1>Leaderboard</h1>
+    <div class="leaderboard" >
+        <div class="user" >
+            {{#each user_leaderboard}}
+                {{> contribution}}
+            {{/each}}
+        </div>
+
+        <div class="guild" >
+            {{#each guild_leaderboard}}
+                {{> contribution}}
+            {{/each}}
+        </div>
     </div>
     
     {{> footer}}

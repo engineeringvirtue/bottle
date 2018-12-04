@@ -24,3 +24,16 @@
 .bottle {
     z-index: 1000;
 }
+
+.leaderboard {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    margin: 5% 10%;
+}
+
+.leaderboard > * {
+    min-width: 20%;
+    max-width: 50%;
+    z-index: 1000;
+}

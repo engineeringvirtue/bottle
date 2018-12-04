@@ -9,8 +9,7 @@ use serenity::utils::Colour;
 use model::id::*;
 use model;
 use model::*;
-use data::functions::random;
-use schema::{guild};
+use schema::{guild, received_bottle};
 
 pub fn col_wheel(num: usize) -> Colour {
     match num%8 {
@@ -26,6 +25,7 @@ pub fn col_wheel(num: usize) -> Colour {
 }
 
 pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Config) -> Res<Message> {
+    channel.broadcast_typing()?;
     let msg = channel.send_message(|x| x.embed(|e| {
         let title = if level > 0 { "You have found a message glued to the bottle!" } else { "You have recovered a bottle!" }; //TODO: better reply system, takes last bottle as an argument
 
@@ -91,15 +91,6 @@ pub fn distribute_to_channel(bottles: &Vec<(usize, Bottle)>, channel: i64, conn:
     let last_bottle = ReceivedBottle::get_last(channel, conn).ok().map(|x| x.bottle);
     let unrepeated: Vec<&(usize, Bottle)> = bottles.into_iter().take_while(|(_, x)| Some(x.id) != last_bottle).collect();
 
-    if let Some(x) = last_bottle {
-        if unrepeated.len() > 0
-            && Bottle::in_reply_to(x, conn)? == 0 {
-
-            let b = Bottle::get(x, conn)?;
-            distribute_bottle(&b, conn, cfg)?;
-        }
-    }
-
     for (i, bottle) in unrepeated.into_iter().rev() {
 
         let msg = render_bottle(&bottle, *i, bottlechannelid, cfg)?;
@@ -113,11 +104,14 @@ pub fn distribute_to_channel(bottles: &Vec<(usize, Bottle)>, channel: i64, conn:
 const DELIVERNUM: i64 = 3;
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
-    let guilds: Vec<Guild> =
-        guild::table.filter(guild::bottle_channel.is_not_null())
-            .filter(guild::bottle_channel.ne(bottle.channel)).order(random).limit(DELIVERNUM).load(conn)?;
+    let guilds: Vec<Option<i64>> =
+        guild::table.left_join(received_bottle::table.on(received_bottle::channel.nullable().eq(guild::bottle_channel)))
+            .filter(guild::bottle_channel.is_not_null())
+            .filter(guild::bottle_channel.ne(bottle.channel))
+            .order(received_bottle::time_recieved).limit(DELIVERNUM)
+            .select(guild::bottle_channel).load(conn)?;
 
-    let mut channels: Vec<i64> = guilds.iter().filter_map(|x| x.bottle_channel).collect();
+    let mut channels: Vec<i64> = guilds.into_iter().filter_map(|x| x).collect();
     channels.extend(bottles.iter().map(|(_, b)| b.channel));
     channels.dedup();
 
