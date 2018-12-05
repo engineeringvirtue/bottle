@@ -105,11 +105,12 @@ const DELIVERNUM: i64 = 3;
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
     let guilds: Vec<Option<i64>> =
-        guild::table.left_join(received_bottle::table.on(received_bottle::channel.nullable().eq(guild::bottle_channel)))
+        guild::table.inner_join(received_bottle::table.on(received_bottle::channel.nullable().eq(guild::bottle_channel)))
             .filter(guild::bottle_channel.is_not_null())
             .filter(guild::bottle_channel.ne(bottle.channel))
-            .order(received_bottle::time_recieved).limit(DELIVERNUM)
-            .select(guild::bottle_channel).load(conn)?;
+            .distinct_on(received_bottle::time_recieved.desc())
+            .order_by(received_bottle::time_recieved.asc())
+            .limit(DELIVERNUM).select(guild::bottle_channel).load(conn)?;
 
     let mut channels: Vec<i64> = guilds.into_iter().filter_map(|x| x).collect();
     channels.extend(bottles.iter().map(|(_, b)| b.channel));
