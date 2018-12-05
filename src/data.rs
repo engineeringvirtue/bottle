@@ -42,7 +42,7 @@ impl User {
     }
 
     pub fn get_top(limit: i64, conn: &Conn) -> Res<Vec<Self>> {
-        user_rank::table.inner_join(user::table).order_by(user_rank::rank.desc())
+        user_rank::table.inner_join(user::table).order_by(user_rank::rank)
             .select(user::all_columns).limit(limit).load(conn)
     }
 
@@ -89,7 +89,7 @@ impl Guild {
     }
 
     pub fn get_top(limit: i64, conn: &Conn) -> Res<Vec<Self>> {
-        guild_rank::table.inner_join(guild::table).order_by(guild_rank::rank.desc())
+        guild_rank::table.inner_join(guild::table).order_by(guild_rank::rank)
             .select(guild::all_columns).limit(limit).load(conn)
     }
 

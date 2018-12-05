@@ -51,17 +51,6 @@ b {
     box-shadow: rgba(0, 0, 0, 0.3) 0 0 50px;
 }
 
-.main {
-    display: flex;
-    flex-direction: column;
-}
-
-.content {
-    font-size: 1.2em;
-    word-wrap: break-word;
-    color: white;
-}
-
 .time {
     font-size: 0.5em;
     color: gray;

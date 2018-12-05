@@ -33,7 +33,6 @@
 }
 
 .leaderboard > * {
-    min-width: 20%;
     max-width: 50%;
     z-index: 1000;
 }

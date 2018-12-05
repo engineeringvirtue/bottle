@@ -1,10 +1,5 @@
 @import url('https://fonts.googleapis.com/css?family=Lato');
 
-html {
-    height: 100%;
-    width: 100%;
-}
-
 html, body {
     margin: 0;
 }
@@ -33,4 +28,17 @@ a {
     background: #f72c4b2c;
     box-shadow: rgba(0, 0, 0, 0.3) 0 0 50px;
     word-wrap: break-word;
+}
+
+.main {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.content {
+    font-size: 1.2em;
+    word-wrap: break-word;
+    color: white;
 }
