@@ -9,7 +9,7 @@ use serenity::utils::Colour;
 use model::id::*;
 use model;
 use model::*;
-use schema::{guild, received_bottle};
+use diesel::sql_types::BigInt;
 
 pub fn col_wheel(num: usize) -> Colour {
     match num%8 {
@@ -102,17 +102,16 @@ pub fn distribute_to_channel(bottles: &Vec<(usize, Bottle)>, channel: i64, conn:
 }
 
 const DELIVERNUM: i64 = 3;
+#[derive(QueryableByName)]
+struct BottleChannel(#[sql_type="BigInt"] #[column_name="bottle_channel"] i64);
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
-    let guilds: Vec<Option<i64>> =
-        guild::table.inner_join(received_bottle::table.on(received_bottle::channel.nullable().eq(guild::bottle_channel)))
-            .filter(guild::bottle_channel.is_not_null())
-            .filter(guild::bottle_channel.ne(bottle.channel))
-            .distinct_on(received_bottle::time_recieved)
-            .order_by(received_bottle::time_recieved.asc())
-            .limit(DELIVERNUM).select(guild::bottle_channel).load(conn)?;
+    let guilds: Vec<BottleChannel> = diesel::sql_query(
+        "SELECT bottle_channel FROM (SELECT DISTINCT ON (guild.id) * FROM guild LEFT JOIN received_bottle ON (bottle_channel = received_bottle.channel) ORDER BY guild.id, received_bottle.time_recieved DESC) channels\
+        WHERE bottle_channel IS NOT NULL AND bottle_channel != ? ORDER BY time_recieved ASC NULLS FIRST LIMIT ?")
+        .bind::<BigInt, _>(bottle.channel).bind::<BigInt, _>(DELIVERNUM).load(conn)?;
 
-    let mut channels: Vec<i64> = guilds.into_iter().filter_map(|x| x).collect();
+    let mut channels: Vec<i64> = guilds.into_iter().map(|BottleChannel(x)| x).collect();
     channels.extend(bottles.iter().map(|(_, b)| b.channel));
     channels.dedup();
 
