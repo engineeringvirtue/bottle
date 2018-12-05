@@ -240,3 +240,7 @@ pub fn get_bottle_count (conn: &Conn) -> Res<i64> {
 pub fn get_user_count (conn: &Conn) -> Res<i64> {
     select(estimate_rows("user".to_owned())).get_result(conn)
 }
+
+pub fn get_guild_count (conn: &Conn) -> Res<i64> {
+    select(estimate_rows("guild".to_owned())).get_result(conn)
+}

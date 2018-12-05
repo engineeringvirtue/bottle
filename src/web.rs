@@ -344,7 +344,7 @@ fn redirect(req: &mut Request) -> IronResult<Response> {
 struct HomePage {
     bottle_count: i64,
     user_count: i64,
-    guild_count: usize,
+    guild_count: i64,
 
     guild_leaderboard: Vec<GuildContribution>,
     user_leaderboard: Vec<UserContribution>
@@ -357,7 +357,7 @@ fn home(req: &mut Request) -> IronResult<Response> {
         Ok(HomePage {
             bottle_count: get_bottle_count(conn).map_err(Box::new)?,
             user_count: get_user_count(conn)?,
-            guild_count: serenity::CACHE.read().all_guilds().len(),
+            guild_count: get_guild_count(conn)?,
 
             guild_leaderboard: Guild::get_top(10, conn)?
                 .into_iter().map(|x| GuildContribution {gid: x.id, guild: get_guild_name(x.id), xp: x.get_xp(conn).unwrap_or(0)}).collect(),
