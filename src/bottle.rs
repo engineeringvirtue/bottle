@@ -108,7 +108,7 @@ pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
         guild::table.inner_join(received_bottle::table.on(received_bottle::channel.nullable().eq(guild::bottle_channel)))
             .filter(guild::bottle_channel.is_not_null())
             .filter(guild::bottle_channel.ne(bottle.channel))
-            .distinct_on(received_bottle::time_recieved.desc())
+            .distinct_on(received_bottle::time_recieved)
             .order_by(received_bottle::time_recieved.asc())
             .limit(DELIVERNUM).select(guild::bottle_channel).load(conn)?;
 
