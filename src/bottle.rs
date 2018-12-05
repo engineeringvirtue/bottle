@@ -107,8 +107,8 @@ struct BottleChannel(#[sql_type="BigInt"] #[column_name="bottle_channel"] i64);
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
     let guilds: Vec<BottleChannel> = diesel::sql_query(
-        "SELECT bottle_channel FROM (SELECT DISTINCT ON (guild.id) * FROM guild LEFT JOIN received_bottle ON (bottle_channel = received_bottle.channel) ORDER BY guild.id, received_bottle.time_recieved DESC) channels\
-        WHERE bottle_channel IS NOT NULL AND bottle_channel != ? ORDER BY time_recieved ASC NULLS FIRST LIMIT ?")
+        "SELECT bottle_channel FROM (SELECT DISTINCT ON (guild.id) * FROM guild LEFT JOIN received_bottle ON (bottle_channel = received_bottle.channel) ORDER BY guild.id, received_bottle.time_recieved DESC) channels
+        WHERE bottle_channel IS NOT NULL AND bottle_channel != $1 ORDER BY time_recieved ASC NULLS FIRST LIMIT $2")
         .bind::<BigInt, _>(bottle.channel).bind::<BigInt, _>(DELIVERNUM).load(conn)?;
 
     let mut channels: Vec<i64> = guilds.into_iter().map(|BottleChannel(x)| x).collect();
