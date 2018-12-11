@@ -100,7 +100,19 @@ impl EventHandler for Handler {
     fn message_delete(&self, ctx: Context, _channel: serenity::model::id::ChannelId, deleted_msg_id: serenity::model::id::MessageId) {
         let conn = &ctx.get_conn();
         if let Ok(x) = Bottle::get_from_message(deleted_msg_id.as_i64(), conn) {
-            bottle::del_bottle(x.id, conn, &ctx.get_cfg()).unwrap();
+            bottle::del_bottle(x, conn, &ctx.get_cfg()).unwrap();
+        }
+    }
+
+    fn message_update(&self, ctx: Context, new_data: serenity::model::event::MessageUpdateEvent) {
+        if let Ok(x) = new_data.channel_id.message(new_data.id) {
+            let res = bottle::edit_bottle(&x, x.guild_id.map(AsI64::as_i64), ctx.get_pool(), &ctx.get_cfg());
+
+            match res {
+                Ok(Some(msg)) => x.reply(&msg).ok(),
+                Err(err) => x.reply(err.description()).ok(),
+                _ => None
+            };
         }
     }
 
@@ -143,7 +155,7 @@ impl EventHandler for Handler {
 
     fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
         ctx.set_presence(Some(gateway::Game {kind: gateway::GameType::Listening, name: "you, try -help".to_owned(), url: None})
-                         , serenity::model::user::OnlineStatus::DoNotDisturb);
+                         , serenity::model::user::OnlineStatus::Online);
 
         let conn = &ctx.get_conn();
         let mut u = User::get(ctx.get_cfg().auto_admin, conn);
@@ -263,6 +275,7 @@ fn main() {
                         }
                     }
 
+                    info!("{} sent {} to all guilds!", msg.author.tag(), announcement);
                     msg.reply("Sent to all guilds!")?;
                     Ok(())
                 })

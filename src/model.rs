@@ -33,7 +33,7 @@ pub type ReceivedBottleId = i64;
 pub type GuildContributionId = (GuildId, UserId);
 pub type ReportId = i64;
 
-#[derive(Insertable)]
+#[derive(Insertable, AsChangeset, Clone)]
 #[table_name="bottle"]
 pub struct MakeBottle {
     pub user: UserId,
@@ -77,7 +77,8 @@ pub struct Bottle {
     pub url: Option<String>,
     pub image: Option<String>,
 
-    pub channel: i64
+    pub channel: i64,
+    pub deleted: bool
 }
 
 #[derive(Queryable, Insertable, AsChangeset, Identifiable, Debug)]
@@ -184,6 +185,17 @@ pub fn error_url(cfg: &Config) -> String {
 
 pub fn report_url(bid: BottleId, cfg: &Config) -> String { format!("{}/report/{}", cfg.host_url, bid) }
 
+pub fn get_guild_name(id: GuildId) -> String {
+    use serenity::model::id::GuildId;
+    GuildId(id as u64).to_guild_cached().map(|x| x.read().name.to_owned())
+        .unwrap_or_else(|| "Guild not found".to_owned())
+}
+
+pub fn get_user_name(id: UserId) -> String {
+    use serenity::model::id::UserId;
+    UserId(id as u64).to_user().ok().map(|x| x.name).unwrap_or_else(|| "User not found".to_owned())
+}
+
 pub struct DConfig;
 impl Key for DConfig {
     type Value = Config;
@@ -251,35 +263,25 @@ impl GetBots for serenity::prelude::Context {
 pub mod id {
     use serenity::model::id::*;
 
-    pub trait AsI64 { fn as_i64(&self) -> i64; }
+    pub trait AsI64 { fn as_i64(self) -> i64; }
 
     impl AsI64 for UserId {
-        fn as_i64(&self) -> i64 {
-            *self.as_u64() as i64
-        }
+        fn as_i64(self) -> i64 { self.0 as i64 }
     }
 
     impl AsI64 for ChannelId {
-        fn as_i64(&self) -> i64 {
-            *self.as_u64() as i64
-        }
+        fn as_i64(self) -> i64 { self.0 as i64 }
     }
 
     impl AsI64 for GuildId {
-        fn as_i64(&self) -> i64 {
-            *self.as_u64() as i64
-        }
+        fn as_i64(self) -> i64 { self.0 as i64 }
     }
 
     impl AsI64 for MessageId {
-        fn as_i64(&self) -> i64 {
-            *self.as_u64() as i64
-        }
+        fn as_i64(self) -> i64 { self.0 as i64 }
     }
 
     impl AsI64 for EmojiId {
-        fn as_i64(&self) -> i64 {
-            *self.as_u64() as i64
-        }
+        fn as_i64(self) -> i64 { self.0 as i64 }
     }
 }

@@ -17,6 +17,7 @@ table! {
         url -> Nullable<Text>,
         image -> Nullable<Text>,
         channel -> Int8,
+        deleted -> Bool,
     }
 }
 

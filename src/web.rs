@@ -119,17 +119,6 @@ impl AfterMiddleware for StatusMiddleware {
     }
 }
 
-pub fn get_guild_name(id: GuildId) -> String {
-    use serenity::model::id::GuildId;
-    GuildId(id as u64).to_guild_cached().map(|x| x.read().name.to_owned())
-        .unwrap_or_else(|| "Guild not found".to_owned())
-}
-
-pub fn get_user_name(id: UserId) -> String {
-    use serenity::model::id::UserId;
-    UserId(id as u64).to_user().ok().map(|x| x.name).unwrap_or_else(|| "User not found".to_owned())
-}
-
 #[derive(Deserialize, Serialize)]
 struct BottlePage {
     contents: String, time_pushed: String, image: Option<String>, guild: Option<String>

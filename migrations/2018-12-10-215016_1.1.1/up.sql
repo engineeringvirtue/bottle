@@ -1,0 +1,1 @@
+ALTER TABLE bottle ADD COLUMN deleted bool NOT NULL DEFAULT false;

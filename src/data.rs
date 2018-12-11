@@ -51,7 +51,7 @@ impl User {
     }
 
     pub fn get_last_bottles(&self, limit:i64, conn:&Conn) -> Res<Vec<Bottle>> {
-        Bottle::belonging_to(self).filter(bottle::guild.is_not_null()).filter(bottle::reply_to.is_null()).order(bottle::time_pushed.desc()).limit(limit).load(conn)
+        Bottle::belonging_to(self).filter(bottle::guild.is_not_null()).filter(bottle::reply_to.is_null()).filter(bottle::deleted.eq(false)).order(bottle::time_pushed.desc()).limit(limit).load(conn)
     }
 
     pub fn get_all_bottles(&self, conn:&Conn) -> Res<Vec<Bottle>> {
@@ -141,18 +141,27 @@ impl Bottle {
         bottle::table.filter(bottle::message.eq(mid)).first(conn)
     }
 
+    pub fn edit(id: BottleId, change: MakeBottle, conn:&Conn) -> Res<usize> {
+        update(bottle::table.filter(bottle::id.eq(id))).set(change).execute(conn)
+    }
+
     pub fn in_reply_to(id: BottleId, conn:&Conn) -> Res<i64> {
          bottle::table.filter(bottle::reply_to.eq(id)).select(dsl::count_star()).first(conn)
     }
 
     pub fn del(id:BottleId, conn:&Conn) -> Res<usize> {
-        delete(bottle::table).filter(bottle::id.eq(id)).execute(conn)
+        update(bottle::table).filter(bottle::id.eq(id)).set(bottle::deleted.eq(true)).execute(conn)
     }
 
-    pub fn get_reply_list(&self, conn:&Conn) -> Res<Vec<Self>> {
+    pub fn get_reply_list(&self, conn:&Conn) -> Res<(Vec<Self>, bool)> {
         let mut bottles: Vec<Bottle> = Vec::new();
+        bottles.push(self.clone());
 
-        while bottles.len() < 10 {
+        loop {
+            if bottles.len() == 10 {
+                return Ok((bottles, true))
+            }
+
             match bottles.last().unwrap_or(self).reply_to {
                 Some(x) => {
                     bottles.push(Bottle::get(x, conn)?);
@@ -161,8 +170,7 @@ impl Bottle {
             }
         }
 
-        bottles.insert(0, self.clone());
-        Ok(bottles)
+        Ok((bottles, false))
     }
 }
 
@@ -186,7 +194,10 @@ impl ReceivedBottle {
     }
 
     pub fn get_last(channel: i64, conn:&Conn) -> Res<ReceivedBottle> {
-        received_bottle::table.filter(received_bottle::channel.eq(channel)).order(received_bottle::time_recieved.desc()).first(conn)
+        received_bottle::table.left_join(bottle::table)
+            .filter(received_bottle::channel.eq(channel)).filter(bottle::deleted.eq(false))
+            .select(received_bottle::all_columns)
+            .order(received_bottle::time_recieved.desc()).first(conn)
     }
 
     pub fn del(&self, conn:&Conn) -> Res<usize> {

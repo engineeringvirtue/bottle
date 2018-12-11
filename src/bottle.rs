@@ -24,9 +24,16 @@ pub fn col_wheel(num: usize) -> Colour {
     }
 }
 
-pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Config) -> Res<Message> {
+pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize, in_reply: bool, channel: ChannelId, cfg:&Config) -> Res<Message> {
     channel.broadcast_typing()?;
-    let msg = channel.send_message(|x| x.embed(|e| {
+
+    if in_reply {
+        level += 1;
+    }
+
+    let embd: Res<serenity::builder::CreateEmbed> = {
+        let mut e = serenity::builder::CreateEmbed::default();
+
         let title = if level > 0 { "You have found a message glued to the bottle!" } else { "You have recovered a bottle!" }; //TODO: better reply system, takes last bottle as an argument
 
         let mut extra_info = String::new();
@@ -79,33 +86,43 @@ pub fn render_bottle (bottle: &Bottle, level: usize, channel: ChannelId, cfg:&Co
             e = e.url(url);
         }
 
-        e
-    }))?;
+        Ok(e)
+    };
+
+    let embd = embd?;
+    let msg = {
+        if let Some(x) = edit {
+            channel.edit_message(x, |x| x.embed(|_| embd))
+        } else {
+            channel.send_message(|x| x.embed(|_| embd))
+        }
+    }?;
 
     Ok(msg)
 }
 
-pub fn distribute_to_channel(bottles: &Vec<(usize, Bottle)>, channel: i64, conn: &Conn, cfg:&Config) -> Res<()> {
+const DELIVERNUM: i64 = 3;
+
+pub fn distribute_to_channel((bottles, in_reply): (&Vec<(usize, Bottle)>, &bool), channel: i64, conn: &Conn, cfg:&Config) -> Res<()> {
     let bottlechannelid = ChannelId(channel as u64);
 
     let last_bottle = ReceivedBottle::get_last(channel, conn).ok().map(|x| x.bottle);
     let unrepeated: Vec<&(usize, Bottle)> = bottles.into_iter().take_while(|(_, x)| Some(x.id) != last_bottle).collect();
 
     for (i, bottle) in unrepeated.into_iter().rev() {
-
-        let msg = render_bottle(&bottle, *i, bottlechannelid, cfg)?;
+        let msg = render_bottle(&bottle, None, *i, *in_reply, bottlechannelid, cfg)?;
         MakeReceivedBottle {bottle: bottle.id, channel: bottlechannelid.as_i64(), message: msg.id.as_i64(), time_recieved: now()}.make(conn)?;
     }
 
     trace!("Delivered bottle to channel {}", &channel);
     Ok (())
 }
-
-const DELIVERNUM: i64 = 3;
 #[derive(QueryableByName)]
 struct BottleChannel(#[sql_type="BigInt"] #[column_name="bottle_channel"] i64);
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
-    let bottles: Vec<(usize, Bottle)> = bottle.get_reply_list(conn)?.into_iter().rev().enumerate().rev().collect();
+    let (bottles, in_reply) = bottle.get_reply_list(conn)?;
+    let bottles: Vec<(usize, Bottle)> = bottles.into_iter().rev().enumerate().rev().collect();
+
     let guilds: Vec<BottleChannel> = diesel::sql_query(
         "SELECT bottle_channel FROM (SELECT DISTINCT ON (guild.id) * FROM guild LEFT JOIN received_bottle ON (bottle_channel = received_bottle.channel) ORDER BY guild.id, received_bottle.time_recieved DESC) channels
         WHERE bottle_channel IS NOT NULL AND bottle_channel != $1 ORDER BY time_recieved ASC NULLS FIRST LIMIT $2")
@@ -117,7 +134,7 @@ pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
 
     for channel in channels {
         if channel != bottle.channel {
-            let _ = distribute_to_channel(&bottles, channel, conn, cfg);
+            let _ = distribute_to_channel((&bottles, &in_reply), channel, conn, cfg);
         }
     }
 
@@ -129,7 +146,7 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
     let user = UserId(user as u64).to_user()?;
     let msg = channel.say(&format!("REPORT FROM {}. USER ID {}, BOTTLE ID {}.", user.tag(), user.id, bottle.id))?;
 
-    let bottlemsg: Message = render_bottle(&bottle, 0, channel, cfg)?;
+    let bottlemsg: Message = render_bottle(&bottle, None, 0, true, channel, cfg)?;
 
     msg.react(cfg.ban_emoji.as_str())?;
     bottlemsg.react(cfg.ban_emoji.as_str())?;
@@ -140,18 +157,17 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
     Ok(msg)
 }
 
-pub fn del_bottle(bid: BottleId, conn:&Conn, cfg: &Config) -> Res<()> {
+pub fn del_bottle(b: Bottle, conn:&Conn, _cfg: &Config) -> Res<()> {
     trace!("Bottle deleted");
 
-    for b in ReceivedBottle::get_from_bottle(bid, conn)? {
-        if b.channel != cfg.admin_channel {
-            if let Some(mut msg) = ChannelId(b.channel as u64).message(MessageId(b.message as u64)).ok() {
-                let _ = msg.edit(|x| x.embed(|x| x.title("DELETED").description("This bottle has been deleted.")));
-            }
+    for rb in ReceivedBottle::get_from_bottle(b.id, conn)? {
+        if let Some(mut msg) = ChannelId(rb.channel as u64).message(MessageId(rb.message as u64)).ok() {
+            let _ = msg.edit(|x| x.embed(|x| x.title(
+                format!("BOTTLE FROM {} IS DELETED", get_user_name(b.user))).description("This bottle has been deleted.")));
         }
     }
 
-    Bottle::del(bid, conn)?;
+    Bottle::del(b.id, conn)?;
     Ok(())
 }
 
@@ -174,7 +190,7 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
             if add {
                 let u = User::get(user, conn);
                 for x in u.get_all_bottles(conn)? {
-                    del_bottle(x.id, conn, cfg)?;
+                    del_bottle(x, conn, cfg)?;
                 }
 
                 b.make(conn)?;
@@ -190,7 +206,7 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
             if emoji_name == cfg.ban_emoji {
                 ban(None, bottle.user)?;
             } else if emoji_name == cfg.delete_emoji && add {
-                del_bottle(bottle.id, conn, cfg)?;
+                del_bottle(bottle, conn, cfg)?;
             }
         } else if let Ok(report) = Report::get_from_message(mid, conn) {
             if emoji_name == cfg.ban_emoji {
@@ -216,13 +232,10 @@ pub fn give_xp(bottle: &Bottle, xp: i32, conn:&Conn) -> Res<()> {
     Ok(())
 }
 
-pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:Config) -> Res<Option<String>> {
-    trace!("New bottle found");
-
-    let userid = new_message.author.id.as_i64();
-    let msgid = new_message.id.as_i64();
-    let channelid = new_message.channel_id.as_i64();
-    let conn = &connpool.get_conn();
+pub fn bottle_from_msg(message: &Message, edit: bool, guild: Option<model::GuildId>, conn:&Conn, _cfg:&Config) -> Res<Result<MakeBottle, Option<String>>> { //kill meh naw
+    let userid = message.author.id.as_i64();
+    let msgid = message.id.as_i64();
+    let channelid = message.channel_id.as_i64();
 
     let mut user = User::get(userid, conn);
 
@@ -232,28 +245,30 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
         user.update(conn)?;
 
         if user.tickets > MAX_TICKETS {
-            Ok(None)
+            Ok(Err(None))
         } else {
-            Ok(Some(err))
+            Ok(Err(Some(err)))
         }
     };
 
-    if let Some (ref bottle) = lastbottle {
-        let since_push = now().signed_duration_since(bottle.time_pushed);
-        let cooldown = Duration::minutes(COOLDOWN);
+    if !user.admin && !edit {
+        if let Some(ref bottle) = lastbottle {
+            let since_push = now().signed_duration_since(bottle.time_pushed);
+            let cooldown = Duration::minutes(COOLDOWN);
 
-        if since_push < cooldown && !user.admin {
-            let towait = cooldown - since_push;
-            return ticket_res(user, format!("You must wait {} seconds before sending another bottle!", towait.num_seconds()));
+            if since_push < cooldown {
+                let towait = cooldown - since_push;
+                return ticket_res(user, format!("You must wait {} seconds before sending another bottle!", towait.num_seconds()));
+            }
+        }
+
+        if user.get_banned(conn)? {
+            return ticket_res(user, "You are banned from using Bottle! Appeal by dming the global admins!".to_owned());
         }
     }
 
-    if !user.admin && user.get_banned(conn)? {
-        return ticket_res(user, "You are banned from using Bottle! Appeal by dming the global admins!".to_owned());
-    }
+    let mut contents = message.content.clone();
 
-    let mut contents = new_message.content.clone();
-    
     let get_reply_to = || -> Res<Option<i64>> {
         let rbottle = ReceivedBottle::get_last(channelid, conn).map_err(|_| "No bottle to reply to found!")?;
         Ok(Some(rbottle.bottle))
@@ -272,8 +287,8 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
 
     contents = contents.trim().to_owned();
 
-    let url = new_message.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
-    let image = new_message.attachments.get(0).map(|a: &Attachment| a.url.clone());
+    let url = message.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
+    let image = message.attachments.get(0).map(|a: &Attachment| a.url.clone());
 
     if url.is_none() && image.is_none() && contents.len() < MIN_CHARS && !user.admin {
         return ticket_res(user, "Your bottle cannot be less than 10 characters!".to_owned());
@@ -282,23 +297,37 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
     user.tickets = 0;
     user.update(conn)?;
 
+    Ok(Ok(MakeBottle { message: msgid, reply_to, channel: channelid, guild, user: user.id, time_pushed: now(), contents, url, image }))
+}
+
+pub fn new_bottle(new_msg: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:Config) -> Res<Option<String>> {
+    trace!("New bottle found");
+    let conn = &connpool.get_conn();
+
+    let bottle =
+        match bottle_from_msg(new_msg, false, guild, conn, &cfg)? {
+            Ok(x) => x,
+            Err(x) => return Ok(x)
+        };
+
+    let bottle = bottle.make(conn)?;
+
     let mut xp = 0;
 
-    if let Some(r) = reply_to {
+    xp += PUSHXP;
+
+    if let Some(r) = bottle.reply_to {
         let replied = Bottle::get(r, conn)?;
-        if replied.user != user.id {
+        if replied.user != new_msg.author.id.as_i64() {
             give_xp(&replied, REPLYXP, conn)?;
         }
     }
 
-    xp += PUSHXP;
-    if url.is_some() { xp += URLXP; }
-    if image.is_some() { xp += IMAGEXP; }
-
-    let bottle = MakeBottle { message: msgid, reply_to, channel: channelid, guild, user: user.id, time_pushed: now(), contents, url, image }
-        .make(conn)?;
+    if bottle.url.is_some() { xp += URLXP; }
+    if bottle.image.is_some() { xp += IMAGEXP; }
 
     give_xp(&bottle, xp, conn)?;
+
     debug!("Sending bottle: {:?}", &bottle);
 
     thread::spawn(move || {
@@ -306,4 +335,34 @@ pub fn new_bottle(new_message: &Message, guild: Option<model::GuildId>, connpool
     });
 
     Ok(Some("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned()))
+}
+
+pub fn edit_bottle(edit_msg: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:&Config) -> Res<Option<String>> {
+    trace!("New bottle found");
+    let conn = &connpool.get_conn();
+
+    let bottle =
+        match Bottle::get_from_message(edit_msg.id.as_i64(), conn).ok() {
+            Some(x) => x,
+            None => return Ok(None)
+        };
+
+    let ebottle =
+        match bottle_from_msg(edit_msg, false, guild, conn, &cfg)? {
+            Ok(x) => x,
+            Err(x) => return Ok(x)
+        };
+
+    Bottle::edit(bottle.id, ebottle, conn)?;
+
+    let bottle = Bottle::get(bottle.id, conn)?;
+    let (bottles, in_reply) = bottle.get_reply_list(conn)?;
+
+    for rb in ReceivedBottle::get_from_bottle(bottle.id, conn)? {
+        if let Some(mut msg) = ChannelId(rb.channel as u64).message(MessageId(rb.message as u64)).ok() {
+            render_bottle(&bottle, Some(msg.id), bottles.len(), in_reply, ChannelId(rb.channel as u64), cfg)?;
+        }
+    }
+
+    Ok(Some("Edited bottle!".to_owned()))
 }
