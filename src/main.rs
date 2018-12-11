@@ -239,7 +239,7 @@ fn main() {
         )
         .group("Auto Admin Commands", |g|
             g.check(|ctx, msg, _args, _opts| {
-                if !ctx.get_cfg().auto_admin == msg.author.id.as_i64() {
+                if ctx.get_cfg().auto_admin != msg.author.id.as_i64() {
                     let _ = msg.reply("You must be an auto admin to do this!");
                     false
                 } else { true }
