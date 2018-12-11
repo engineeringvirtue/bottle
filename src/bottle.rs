@@ -101,7 +101,7 @@ pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize
     Ok(msg)
 }
 
-const DELIVERNUM: i64 = 3;
+const DELIVERNUM: i64 = 4;
 
 pub fn distribute_to_channel((bottles, in_reply): (&Vec<(usize, Bottle)>, &bool), channel: i64, conn: &Conn, cfg:&Config) -> Res<()> {
     let bottlechannelid = ChannelId(channel as u64);
