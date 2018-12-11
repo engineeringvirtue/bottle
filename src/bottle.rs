@@ -348,7 +348,7 @@ pub fn edit_bottle(edit_msg: &Message, guild: Option<model::GuildId>, connpool:C
         };
 
     let ebottle =
-        match bottle_from_msg(edit_msg, false, guild, conn, &cfg)? {
+        match bottle_from_msg(edit_msg, true, guild, conn, &cfg)? {
             Ok(x) => x,
             Err(x) => return Ok(x)
         };

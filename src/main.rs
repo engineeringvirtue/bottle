@@ -106,13 +106,15 @@ impl EventHandler for Handler {
 
     fn message_update(&self, ctx: Context, new_data: serenity::model::event::MessageUpdateEvent) {
         if let Ok(x) = new_data.channel_id.message(new_data.id) {
-            let res = bottle::edit_bottle(&x, x.guild_id.map(AsI64::as_i64), ctx.get_pool(), &ctx.get_cfg());
+            if !x.author.bot {
+                let res = bottle::edit_bottle(&x, x.guild_id.map(AsI64::as_i64), ctx.get_pool(), &ctx.get_cfg());
 
-            match res {
-                Ok(Some(msg)) => x.reply(&msg).ok(),
-                Err(err) => x.reply(err.description()).ok(),
-                _ => None
-            };
+                match res {
+                    Ok(Some(msg)) => x.reply(&msg).ok(),
+                    Err(err) => x.reply(err.description()).ok(),
+                    _ => None
+                };
+            }
         }
     }
 
