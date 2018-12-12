@@ -360,7 +360,7 @@ pub fn edit_bottle(edit_msg: &Message, guild: Option<model::GuildId>, connpool:C
 
     for rb in ReceivedBottle::get_from_bottle(bottle.id, conn)? {
         if let Some(mut msg) = ChannelId(rb.channel as u64).message(MessageId(rb.message as u64)).ok() {
-            render_bottle(&bottle, Some(msg.id), bottles.len(), in_reply, ChannelId(rb.channel as u64), cfg)?;
+            render_bottle(&bottle, Some(msg.id), bottles.len() - 1, in_reply, ChannelId(rb.channel as u64), cfg)?;
         }
     }
 
