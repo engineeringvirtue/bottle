@@ -76,6 +76,7 @@ impl EventHandler for Handler {
                 Some(Channel::Guild(ref channel)) => {
                     let channel = channel.read();
                     let gid = channel.guild_id.as_i64();
+                    debug!("New message in guild {}, looking at db....", gid);
                     let guilddata = Guild::get(gid, &conn);
 
                     if Some(channel.id.as_i64()) == guilddata.bottle_channel {
@@ -98,6 +99,7 @@ impl EventHandler for Handler {
     }
 
     fn message_delete(&self, ctx: Context, _channel: serenity::model::id::ChannelId, deleted_msg_id: serenity::model::id::MessageId) {
+        debug!("Message {} deleted, checking db...", deleted_msg_id);
         let conn = &ctx.get_conn();
         if let Ok(x) = Bottle::get_from_message(deleted_msg_id.as_i64(), conn) {
             bottle::del_bottle(x, conn, &ctx.get_cfg()).unwrap();
@@ -105,6 +107,7 @@ impl EventHandler for Handler {
     }
 
     fn message_update(&self, ctx: Context, new_data: serenity::model::event::MessageUpdateEvent) {
+        debug!("Message {:?} updated, checking db....", new_data);
         if let Ok(x) = new_data.channel_id.message(new_data.id) {
             if !x.author.bot {
                 let res = bottle::edit_bottle(&x, x.guild_id.map(AsI64::as_i64), ctx.get_pool(), &ctx.get_cfg());
@@ -119,11 +122,13 @@ impl EventHandler for Handler {
     }
 
     fn reaction_add(&self, ctx: Context, r: Reaction) {
+        debug!("Reaction {:?} added...", r);
         let conn = &ctx.get_conn();
         bottle::react(conn, r, true, &ctx.get_cfg()).unwrap();
     }
 
     fn reaction_remove(&self, ctx: Context, r: Reaction) {
+        debug!("Reaction {:?} removed...", r);
         let conn = &ctx.get_conn();
         bottle::react(conn, r, false, &ctx.get_cfg()).unwrap();
     }
@@ -145,14 +150,14 @@ impl EventHandler for Handler {
 
         guilddata.update(&conn).unwrap();
         update_guilds(&ctx);
-        trace!("Gained guild {}.", &guild.name)
+        info!("Gained guild {}.", &guild.name)
     }
 
     fn guild_delete (&self, ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
         Guild::del(incomplete.id.as_i64(), &ctx.get_conn()).unwrap();
 
         update_guilds(&ctx);
-        trace!("Guild lost.")
+        info!("Guild lost.")
     }
 
     fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
