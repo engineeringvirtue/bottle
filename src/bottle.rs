@@ -174,14 +174,14 @@ pub fn del_bottle(b: Bottle, conn:&Conn, _cfg: &Config) -> Res<()> {
 pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
     trace!("Reaction added: {}", r.emoji.to_string());
 
-    let user =
-        if let Ok(x) = r.user() {
-            if x.bot {
-                return Ok(());
-            } else {
-                User::get(x.id.as_i64(), conn);
-            }
-        };
+    let user = {
+        let x = r.user()?;
+        if x.bot {
+            return Ok(());
+        }
+
+        User::get(x.id.as_i64(), conn)
+    };
 
     let mid = r.message_id.as_i64();
 
