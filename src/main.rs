@@ -122,13 +122,11 @@ impl EventHandler for Handler {
     }
 
     fn reaction_add(&self, ctx: Context, r: Reaction) {
-        debug!("Reaction {:?} added...", r);
         let conn = &ctx.get_conn();
         bottle::react(conn, r, true, &ctx.get_cfg()).unwrap();
     }
 
     fn reaction_remove(&self, ctx: Context, r: Reaction) {
-        debug!("Reaction {:?} removed...", r);
         let conn = &ctx.get_conn();
         bottle::react(conn, r, false, &ctx.get_cfg()).unwrap();
     }
