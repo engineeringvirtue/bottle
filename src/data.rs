@@ -195,7 +195,7 @@ impl ReceivedBottle {
 
     pub fn get_last(channel: i64, conn:&Conn) -> Res<ReceivedBottle> {
         received_bottle::table.left_join(bottle::table)
-            .filter(received_bottle::channel.eq(channel)).filter(bottle::deleted.eq(false))
+            .filter(received_bottle::channel.eq(channel))
             .select(received_bottle::all_columns)
             .order(received_bottle::time_recieved.desc()).first(conn)
     }
