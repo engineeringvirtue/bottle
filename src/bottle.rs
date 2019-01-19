@@ -117,6 +117,7 @@ pub fn distribute_to_channel((bottles, in_reply): (&Vec<(usize, Bottle)>, &bool)
     trace!("Delivered bottle to channel {}", &channel);
     Ok (())
 }
+
 #[derive(QueryableByName)]
 struct BottleChannel(#[sql_type="BigInt"] #[column_name="bottle_channel"] i64);
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
@@ -342,34 +343,4 @@ pub fn new_bottle(new_msg: &Message, guild: Option<model::GuildId>, connpool:Con
     });
 
     Ok(Some("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned()))
-}
-
-pub fn edit_bottle(edit_msg: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:&Config) -> Res<Option<String>> {
-    trace!("New bottle found");
-    let conn = &connpool.get_conn();
-
-    let bottle =
-        match Bottle::get_from_message(edit_msg.id.as_i64(), conn).ok() {
-            Some(x) => x,
-            None => return Ok(None)
-        };
-
-    let ebottle =
-        match bottle_from_msg(edit_msg, true, guild, conn, &cfg)? {
-            Ok(x) => x,
-            Err(x) => return Ok(x)
-        };
-
-    Bottle::edit(bottle.id, ebottle, conn)?;
-
-    let bottle = Bottle::get(bottle.id, conn)?;
-    let (bottles, in_reply) = bottle.get_reply_list(conn)?;
-
-    for rb in ReceivedBottle::get_from_bottle(bottle.id, conn)? {
-        if let Some(mut msg) = ChannelId(rb.channel as u64).message(MessageId(rb.message as u64)).ok() {
-            render_bottle(&bottle, Some(msg.id), bottles.len() - 1, in_reply, ChannelId(rb.channel as u64), cfg)?;
-        }
-    }
-
-    Ok(Some("Edited bottle!".to_owned()))
 }

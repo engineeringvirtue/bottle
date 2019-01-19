@@ -158,7 +158,7 @@ impl Bottle {
         bottles.push(self.clone());
 
         loop {
-            if bottles.len() == 10 {
+            if bottles.len() == 4 {
                 return Ok((bottles, true))
             }
 
