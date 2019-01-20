@@ -31,8 +31,12 @@ pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize
         level += 1;
     }
 
-    let embd: Res<serenity::builder::CreateEmbed> = {
-        let mut e = serenity::builder::CreateEmbed::default();
+    let embd: Res<serenity::builder::CreateEmbed> = (|| {
+        let e = serenity::builder::CreateEmbed::default();
+
+        if bottle.deleted {
+            return Ok(e.title(format!("BOTTLE FROM {} IS DELETED", get_user_name(bottle.user))).description("This bottle has been deleted."));
+        }
 
         let title = if level > 0 { "You have found a message glued to the bottle!" } else { "You have recovered a bottle!" }; //TODO: better reply system, takes last bottle as an argument
 
@@ -87,7 +91,7 @@ pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize
         }
 
         Ok(e)
-    };
+    })();
 
     let embd = embd?;
     let msg = {
@@ -158,14 +162,11 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
     Ok(msg)
 }
 
-pub fn del_bottle(b: Bottle, conn:&Conn, _cfg: &Config) -> Res<()> {
+pub fn del_bottle(b: Bottle, conn:&Conn, cfg: &Config) -> Res<()> {
     trace!("Bottle deleted");
 
     for rb in ReceivedBottle::get_from_bottle(b.id, conn)? {
-        if let Some(mut msg) = ChannelId(rb.channel as u64).message(MessageId(rb.message as u64)).ok() {
-            let _ = msg.edit(|x| x.embed(|x| x.title(
-                format!("BOTTLE FROM {} IS DELETED", get_user_name(b.user))).description("This bottle has been deleted.")));
-        }
+        let _ = render_bottle(&b, Some(MessageId(rb.message as u64)), 0, false, ChannelId(rb.channel as u64), cfg);
     }
 
     Bottle::del(b.id, conn)?;

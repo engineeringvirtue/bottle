@@ -106,21 +106,6 @@ impl EventHandler for Handler {
         }
     }
 
-//    fn message_update(&self, ctx: Context, new_data: serenity::model::event::MessageUpdateEvent) {
-//        debug!("Message {:?} updated, checking db....", new_data);
-//        if let Ok(x) = new_data.channel_id.message(new_data.id) {
-//            if !x.author.bot {
-//                let res = bottle::edit_bottle(&x, x.guild_id.map(AsI64::as_i64), ctx.get_pool(), &ctx.get_cfg());
-//
-//                match res {
-//                    Ok(Some(msg)) => x.reply(&msg).ok(),
-//                    Err(err) => x.reply(err.description()).ok(),
-//                    _ => None
-//                };
-//            }
-//        }
-//    }
-
     fn reaction_add(&self, ctx: Context, r: Reaction) {
         let conn = &ctx.get_conn();
         bottle::react(conn, r, true, &ctx.get_cfg()).unwrap();
