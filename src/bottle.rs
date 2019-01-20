@@ -162,14 +162,16 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
     Ok(msg)
 }
 
-pub fn del_bottle(b: Bottle, conn:&Conn, cfg: &Config) -> Res<()> {
+pub fn del_bottle(mut b: Bottle, conn:&Conn, cfg: &Config) -> Res<()> {
     trace!("Bottle deleted");
+
+    Bottle::del(b.id, conn)?;
+    b.deleted = true;
 
     for rb in ReceivedBottle::get_from_bottle(b.id, conn)? {
         let _ = render_bottle(&b, Some(MessageId(rb.message as u64)), 0, false, ChannelId(rb.channel as u64), cfg);
     }
 
-    Bottle::del(b.id, conn)?;
     Ok(())
 }
 
