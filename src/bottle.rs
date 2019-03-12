@@ -94,7 +94,7 @@ pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize
     })();
 
     let embd = embd?;
-    debug!("Embed is ready.");
+
     let msg = {
         if let Some(x) = edit {
             channel.edit_message(x, |x| x.embed(|_| embd))
@@ -103,7 +103,6 @@ pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize
         }
     }?;
 
-    debug!("Sent msg! ID: {}", msg.id);
     Ok(msg)
 }
 
@@ -125,23 +124,32 @@ pub fn distribute_to_channel((bottles, in_reply): (&Vec<(usize, Bottle)>, &bool)
 }
 
 #[derive(QueryableByName)]
-struct BottleChannel(#[sql_type="BigInt"] #[column_name="bottle_channel"] i64);
+struct GuildsResult {
+    #[sql_type="BigInt"] #[column_name="id"]
+    id: i64,
+    #[sql_type="BigInt"] #[column_name="bottle_channel"]
+    bottle_channel: i64
+}
+
 pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     let (bottles, in_reply) = bottle.get_reply_list(conn)?;
     let bottles: Vec<(usize, Bottle)> = bottles.into_iter().rev().enumerate().rev().collect();
 
-    let guilds: Vec<BottleChannel> = diesel::sql_query(
-        "SELECT bottle_channel FROM (SELECT DISTINCT ON (guild.id) * FROM guild LEFT JOIN received_bottle ON (bottle_channel = received_bottle.channel) ORDER BY guild.id, received_bottle.time_recieved DESC) channels
-        WHERE bottle_channel IS NOT NULL AND bottle_channel != $1 ORDER BY time_recieved ASC NULLS FIRST LIMIT $2")
+    let guilds: Vec<GuildsResult> = diesel::sql_query(
+        "SELECT \"id\", bottle_channel FROM (SELECT DISTINCT ON (guild.id) guild.id, bottle_channel, time_recieved FROM guild LEFT JOIN received_bottle ON (bottle_channel = received_bottle.channel) ORDER BY guild.id, received_bottle.time_recieved DESC) channels
+        WHERE bottle_channel IS NOT NULL ORDER BY time_recieved ASC NULLS FIRST LIMIT $2")
         .bind::<BigInt, _>(bottle.channel).bind::<BigInt, _>(DELIVERNUM).load(conn)?;
 
-    let mut channels: Vec<i64> = guilds.into_iter().map(|BottleChannel(x)| x).collect();
-    channels.extend(bottles.iter().map(|(_, b)| b.channel));
+    let mut channels: Vec<(Option<i64>, i64)> =
+        guilds.into_iter().map(|GuildsResult {id, bottle_channel}| (Some(id), bottle_channel)).collect(); //tuple of guild and channel
+    channels.extend(bottles.iter().map(|(_, b)| (None, b.channel)));
     channels.dedup();
 
-    for channel in channels {
+    for (guild, channel) in channels {
         if channel != bottle.channel {
-            let _ = distribute_to_channel((&bottles, &in_reply), channel, conn, cfg).map_err(|err| debug!("Error distributing to {:?}: {:?}", channel, err));
+            if let Err(_) = distribute_to_channel((&bottles, &in_reply), channel, conn, cfg) {
+                if let Some(guild) = guild { Guild::del(guild, conn)?; }
+            }
         }
     }
 
