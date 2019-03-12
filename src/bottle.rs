@@ -43,7 +43,7 @@ pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize
         let mut extra_info = String::new();
         if let Some(x) = &bottle.url {
             if bottle.contents.is_empty() {
-                extra_info.push_str(&format!("[Link]({})", x));
+                extra_info.push_str(&format!(" [Link]({})", x));
             }
         };
 
@@ -94,6 +94,7 @@ pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize
     })();
 
     let embd = embd?;
+    debug!("Embed is ready.");
     let msg = {
         if let Some(x) = edit {
             channel.edit_message(x, |x| x.embed(|_| embd))
@@ -102,6 +103,7 @@ pub fn render_bottle (bottle: &Bottle, edit: Option<MessageId>, mut level: usize
         }
     }?;
 
+    debug!("Sent msg! ID: {}", msg.id);
     Ok(msg)
 }
 
