@@ -9,7 +9,7 @@ watch = ["handlebars-iron/watch"]
 [dependencies]
 typemap = "0.3.0"
 discord_bots = "1.0.0"
-serenity = "0.5.9"
+serenity = "0.5.13"
 r2d2 = "0.8.2"
 time = "0.1"
 chrono = "0.4"
