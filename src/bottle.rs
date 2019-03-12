@@ -141,7 +141,7 @@ pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
 
     for channel in channels {
         if channel != bottle.channel {
-            let _ = distribute_to_channel((&bottles, &in_reply), channel, conn, cfg);
+            let _ = distribute_to_channel((&bottles, &in_reply), channel, conn, cfg).map_err(|err| debug!("Error distributing to {:?}: {:?}", channel, err));
         }
     }
 
