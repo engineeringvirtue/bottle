@@ -147,8 +147,11 @@ pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
 
     for (guild, channel) in channels {
         if channel != bottle.channel {
-            if let Err(_) = distribute_to_channel((&bottles, &in_reply), channel, conn, cfg) {
-                if let Some(guild) = guild { Guild::del(guild, conn)?; }
+            if let Err(err) = distribute_to_channel((&bottles, &in_reply), channel, conn, cfg) {
+                if let Some(guild) = guild {
+                    debug!("Deleting guild {}, error sending: {}", guild, err);
+                    Guild::del(guild, conn)?;
+                }
             }
         }
     }
