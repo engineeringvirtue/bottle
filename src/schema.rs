@@ -52,8 +52,8 @@ table! {
 table! {
     report (bottle) {
         bottle -> Int8,
-        message -> Int8,
         user -> Int8,
+        received_bottle -> Nullable<Int8>,
     }
 }
 
@@ -75,6 +75,7 @@ joinable!(guild_contribution -> guild (guild));
 joinable!(guild_contribution -> user (user));
 joinable!(received_bottle -> bottle (bottle));
 joinable!(report -> bottle (bottle));
+joinable!(report -> received_bottle (received_bottle));
 joinable!(report -> user (user));
 
 allow_tables_to_appear_in_same_query!(

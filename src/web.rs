@@ -20,7 +20,6 @@ use serenity::model::guild;
 use serde_json;
 
 use model::*;
-use model::id::*;
 use data::*;
 use bottle;
 
@@ -273,8 +272,8 @@ fn report(req: &mut Request) -> IronResult<Response> {
                     let alreadyexists = Report::exists(bid, conn)?;
 
                     if (x.admin || !banned) && !alreadyexists {
-                        let msg = bottle::report_bottle(&bottle, x.id, conn, &req.get_cfg())?;
-                        Report { user: x.id, bottle: bid, message: msg.id.as_i64() }.make(conn)?;
+                        let received_bottle = bottle::report_bottle(&bottle, x.id, conn, &req.get_cfg())?;
+                        Report { user: x.id, bottle: bid, received_bottle: Some(received_bottle) }.make(conn)?;
 
                         x.xp += REPORTXP;
                         x.update(conn)?;

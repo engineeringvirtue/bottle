@@ -159,7 +159,7 @@ pub fn distribute_bottle (bottle: &Bottle, conn:&Conn, cfg:&Config) -> Res<()> {
     Ok(())
 }
 
-pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Config) -> Res<Message> {
+pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Config) -> Res<ReceivedBottleId> {
     let channel = ChannelId(cfg.admin_channel as u64);
     let user = UserId(user as u64).to_user()?;
     let msg = channel.say(&format!("REPORT FROM {}. USER ID {}, BOTTLE ID {}.", user.tag(), user.id, bottle.id))?;
@@ -170,12 +170,12 @@ pub fn report_bottle(bottle: &Bottle, user: model::UserId, conn: &Conn, cfg: &Co
     bottlemsg.react(cfg.ban_emoji.as_str())?;
     bottlemsg.react(cfg.delete_emoji.as_str())?;
 
-    MakeReceivedBottle {bottle: bottle.id, channel: channel.as_i64(), message: bottlemsg.id.as_i64(), time_recieved: now()}.make(conn)?;
+    let recv = MakeReceivedBottle {bottle: bottle.id, channel: channel.as_i64(), message: bottlemsg.id.as_i64(), time_recieved: now()}.make(conn)?;
 
-    Ok(msg)
+    Ok(recv.id)
 }
 
-pub fn del_bottle(mut b: Bottle, conn:&Conn, cfg: &Config) -> Res<()> {
+pub fn del_bottle(mut b: Bottle, conn: &Conn, cfg: &Config) -> Res<()> {
     trace!("Bottle deleted");
 
     Bottle::del(b.id, conn)?;
@@ -208,8 +208,8 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
     };
 
     let ban =
-        |report: Option<ReportId>, user: model::UserId| -> Res<()> {
-            let b = Ban {user, report};
+        |report: Report, user: model::UserId, conn: &Conn| -> Res<()> { //either received or original
+            let b = Ban { user, report: Some(report.bottle) };
 
             if add {
                 let u = User::get(user, conn);
@@ -226,15 +226,23 @@ pub fn react(conn: &Conn, r: Reaction, add: bool, cfg: &Config) -> Res<()> {
         };
 
     if user.admin {
-        if let Ok(bottle) = Bottle::get_from_message(mid, conn) {
-            if emoji_name == cfg.ban_emoji {
-                ban(None, bottle.user)?;
-            } else if emoji_name == cfg.delete_emoji && add {
-                del_bottle(bottle, conn, cfg)?;
+        let user = user.id;
+
+        if emoji_name == cfg.ban_emoji {
+            if let Ok(recv) = ReceivedBottle::get_from_message(mid, conn) {
+                let buser = Bottle::get(recv.bottle, conn)?.user;
+
+                if let Ok(report) = Report::get_from_recv_user(recv.id, user, conn) { ban(report, buser, conn)?; } else {
+                    let rep = Report { bottle: recv.bottle, user, received_bottle: Some(recv.id) }.make(conn)?;
+                    ban(rep, buser, conn)?;
+                }
+            } else if let Ok(bottle) = Bottle::get_from_message(mid, conn) {
+                let rep = Report { bottle: bottle.id, user, received_bottle: None }.make(conn)?;
+                ban( rep, bottle.user, conn)?;
             }
-        } else if let Ok(report) = Report::get_from_message(mid, conn) {
-            if emoji_name == cfg.ban_emoji {
-                ban(Some(report.bottle), report.user)?;
+        } else if let Ok(bottle) = Bottle::get_recv_or_bottle_from_message(mid, conn) {
+            if emoji_name == cfg.delete_emoji && add {
+                del_bottle(bottle, conn, cfg)?;
             }
         }
     }
@@ -276,6 +284,10 @@ pub fn bottle_from_msg(message: &Message, edit: bool, guild: Option<model::Guild
     };
 
     if !user.admin && !edit {
+        if user.get_banned(conn)? {
+            return ticket_res(user, "You are banned from using Bottle! Appeal by dming the global admins!".to_owned());
+        }
+
         if let Some(ref bottle) = lastbottle {
             let since_push = now().signed_duration_since(bottle.time_pushed);
             let cooldown = Duration::minutes(COOLDOWN);
@@ -284,10 +296,6 @@ pub fn bottle_from_msg(message: &Message, edit: bool, guild: Option<model::Guild
                 let towait = cooldown - since_push;
                 return ticket_res(user, format!("You must wait {} seconds before sending another bottle!", towait.num_seconds()));
             }
-        }
-
-        if user.get_banned(conn)? {
-            return ticket_res(user, "You are banned from using Bottle! Appeal by dming the global admins!".to_owned());
         }
     }
 

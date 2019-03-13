@@ -130,12 +130,12 @@ impl User {
     }
 }
 
-#[derive(Queryable, Insertable)]
+#[derive(Queryable, Insertable, AsChangeset)]
 #[table_name="report"]
 pub struct Report {
     pub bottle: BottleId,
-    pub message: i64,
-    pub user: UserId
+    pub user: UserId,
+    pub received_bottle: Option<ReceivedBottleId>
 }
 
 #[derive(Queryable, Insertable)]

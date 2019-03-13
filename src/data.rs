@@ -134,11 +134,15 @@ impl Bottle {
     }
 
     pub fn get_from_message(mid: i64, conn: &Conn) -> Res<Bottle> {
-        if let Ok(x) = ReceivedBottle::get_from_message(mid, conn) {
-            return Bottle::get(x.bottle, conn);
+        bottle::table.filter(bottle::message.eq(mid)).first(conn)
+    }
+
+    pub fn get_recv_or_bottle_from_message(mid: i64, conn: &Conn) -> Res<Bottle> {
+        if let Ok(recv) = ReceivedBottle::get_from_message(mid, conn) {
+            return Ok(Bottle::get(recv.bottle, conn)?)
         }
 
-        bottle::table.filter(bottle::message.eq(mid)).first(conn)
+        Ok(Bottle::get_from_message(mid, conn)?)
     }
 
     pub fn edit(id: BottleId, change: MakeBottle, conn:&Conn) -> Res<usize> {
@@ -218,15 +222,15 @@ impl GuildContribution {
 
 impl Report {
     pub fn make(&self, conn:&Conn) -> Res<Self> {
-        insert_into(report::table).values(self).get_result(conn)
+        insert_into(report::table).values(self).on_conflict(report::bottle).do_update().set(self).get_result(conn)
     }
 
     pub fn exists(bid: BottleId, conn:&Conn) -> Res<bool> {
         select(dsl::exists(report::table.find(bid))).first(conn)
     }
 
-    pub fn get_from_message(mid:i64, conn:&Conn) -> Res<Self> {
-        report::table.filter(report::message.eq(mid)).first(conn)
+    pub fn get_from_recv_user(rid:ReceivedBottleId, uid: UserId, conn:&Conn) -> Res<Self> {
+        report::table.filter(report::received_bottle.eq(rid)).filter(report::user.eq(uid)).first(conn)
     }
 
     pub fn del(&self, conn:&Conn) -> Res<usize> {
