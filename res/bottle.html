@@ -1,7 +1,7 @@
 <div class="bottle" >
     <div class="main" >
         <p class="content" >
-            &ldquo;{{ contents }}&rdquo;
+            {{#if contents}}&ldquo;{{ contents }}&rdquo;{{/if}}
         </p>
         {{#if image}}
             <div class="image" ><img src="{{ image }}" /></div>
