@@ -36,6 +36,8 @@ joinable!(guild_rank -> guild (id));
 allow_tables_to_appear_in_same_query!(user, user_rank);
 joinable!(user_rank -> user (id));
 
+//TODO: convert conn argument to data access traits (which are then modular and able to be imported easily) or something else cuz this is getting messy
+
 impl User {
     pub fn get(uid: UserId, conn:&Conn) -> Self {
         user::table.find(uid).first(conn).unwrap_or_else(|_| User::new(uid))
@@ -145,6 +147,13 @@ impl Bottle {
         Ok(Bottle::get_from_message(mid, conn)?)
     }
 
+    pub fn get_last(channel: i64, conn:&Conn) -> Res<Bottle> {
+        bottle::table.left_join(received_bottle::table)
+            .filter(bottle::channel.eq(channel).or(received_bottle::channel.eq(channel)))
+            .order((bottle::time_pushed.desc(), received_bottle::time_recieved.desc()))
+            .select(bottle::all_columns).first(conn)
+    }
+
     pub fn edit(id: BottleId, change: MakeBottle, conn:&Conn) -> Res<usize> {
         update(bottle::table.filter(bottle::id.eq(id))).set(change).execute(conn)
     }
@@ -197,11 +206,11 @@ impl ReceivedBottle {
         received_bottle::table.filter(received_bottle::message.eq(mid)).get_result(conn)
     }
 
-    pub fn get_last(channel: i64, conn:&Conn) -> Res<ReceivedBottle> {
-        received_bottle::table.left_join(bottle::table)
+    pub fn get_last(channel: i64, conn:&Conn) -> Res<Bottle> {
+        received_bottle::table.inner_join(bottle::table)
             .filter(received_bottle::channel.eq(channel))
-            .select(received_bottle::all_columns)
-            .order(received_bottle::time_recieved.desc()).first(conn)
+            .order(received_bottle::time_recieved.desc())
+            .select(bottle::all_columns).first(conn)
     }
 
     pub fn del(&self, conn:&Conn) -> Res<usize> {

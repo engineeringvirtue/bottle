@@ -1,0 +1,1 @@
+ALTER TABLE report ALTER COLUMN received_bottle SET NOT NULL;

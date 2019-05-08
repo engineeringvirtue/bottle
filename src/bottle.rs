@@ -1,4 +1,5 @@
 use std::thread;
+use std::borrow::Cow;
 use chrono::{DateTime, Utc};
 use serenity::model::id::{ChannelId, UserId, GuildId, MessageId};
 use serenity::model::channel::{Message, ReactionType, Reaction, Embed, Attachment};
@@ -111,7 +112,7 @@ const DELIVERNUM: i64 = 4;
 pub fn distribute_to_channel((bottles, in_reply): (&Vec<(usize, Bottle)>, &bool), channel: i64, conn: &Conn, cfg:&Config) -> Res<()> {
     let bottlechannelid = ChannelId(channel as u64);
 
-    let last_bottle = ReceivedBottle::get_last(channel, conn).ok().map(|x| x.bottle);
+    let last_bottle = ReceivedBottle::get_last(channel, conn).ok().map(|x| x.id);
     let unrepeated: Vec<&(usize, Bottle)> = bottles.into_iter().take_while(|(_, x)| Some(x.id) != last_bottle).collect();
 
     for (i, bottle) in unrepeated.into_iter().rev() {
@@ -264,28 +265,51 @@ pub fn give_xp(bottle: &Bottle, xp: i32, conn:&Conn) -> Res<()> {
     Ok(())
 }
 
-pub fn bottle_from_msg(message: &Message, edit: bool, guild: Option<model::GuildId>, conn:&Conn, _cfg:&Config) -> Res<Result<MakeBottle, Option<String>>> { //kill meh naw
-    let userid = message.author.id.as_i64();
-    let msgid = message.id.as_i64();
-    let channelid = message.channel_id.as_i64();
+fn test_prefix<T>(content: &mut String, p: &'static str, v: T) -> Option<T> {
+    if content.starts_with(p) {
+        content.drain(..p.len());
+        
+        Some(v)
+    } else {
+        None
+    }
+}
 
+pub fn new_bottle<'a, 'b>(new_msg: &'a Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:Config) -> Res<Option<Cow<'b, str>>> {
+    trace!("New bottle found");
+
+    let userid = new_msg.author.id.as_i64();
+    let msgid = new_msg.id.as_i64();
+    let channelid = new_msg.channel_id.as_i64();
+    let mut contents = new_msg.content.trim().to_owned();
+
+    let prefix = test_prefix(&mut contents, SEND_PREFIX, Prefix::SendPrefix)
+        .or_else(|| test_prefix(&mut contents, BRANCH_REPLY_PREFIX, Prefix::BranchReplyPrefix)) //in this order cuz one prefix includes the other
+        .or_else(|| test_prefix(&mut contents, REPLY_PREFIX, Prefix::ReplyPrefix));
+
+    let prefix = match prefix {
+        None => return Ok(None),
+        Some(x) => x
+    };
+
+    let conn = &connpool.get_conn();
     let mut user = User::get(userid, conn);
 
     let lastbottle = user.get_bottle(conn).ok();
-    let ticket_res = |mut user: User, err: String| {
+    let ticket_res = |mut user: User, err| -> Res<Option<Cow<'b, str>>>  {
         user.tickets += 1;
         user.update(conn)?;
 
         if user.tickets > MAX_TICKETS {
-            Ok(Err(None))
+            Ok(None)
         } else {
-            Ok(Err(Some(err)))
+            Ok(Some(err))
         }
     };
 
-    if !user.admin && !edit {
+    if !user.admin {
         if user.get_banned(conn)? {
-            return ticket_res(user, "You are banned from using Bottle! Appeal by dming the global admins!".to_owned());
+            return ticket_res(user, "You are banned from using Bottle! Appeal by dming the global admins!".into());
         }
 
         if let Some(ref bottle) = lastbottle {
@@ -294,64 +318,53 @@ pub fn bottle_from_msg(message: &Message, edit: bool, guild: Option<model::Guild
 
             if since_push < cooldown {
                 let towait = cooldown - since_push;
-                return ticket_res(user, format!("You must wait {} seconds before sending another bottle!", towait.num_seconds()));
+                return ticket_res(user, format!("You must wait {} seconds before sending another bottle!", towait.num_seconds()).into());
             }
         }
     }
 
-    let mut contents = message.content.clone();
-
-    let get_reply_to = || -> Res<Option<i64>> {
-        let rbottle = ReceivedBottle::get_last(channelid, conn).map_err(|_| "No bottle to reply to found!")?;
-        Ok(Some(rbottle.bottle))
-    };
-
-    let reply_to =
-        if (&contents).starts_with(REPLY_PREFIX) {
-            contents.drain(..REPLY_PREFIX.len());
-            get_reply_to()?
-        } else if (&contents).starts_with(ALT_REPLY_PREFIX) {
-            contents.drain(..ALT_REPLY_PREFIX.len());
-            get_reply_to()?
-        } else {
-            None
-        };
-
-    contents = contents.trim().to_owned();
-
-    let url = message.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
-    let image = message.attachments.get(0).map(|a: &Attachment| a.url.clone());
+    let url = new_msg.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
+    let image = new_msg.attachments.get(0).map(|a: &Attachment| a.url.clone());
 
     if url.is_none() && image.is_none() && contents.len() < MIN_CHARS && !user.admin {
-        return ticket_res(user, "Your bottle cannot be less than 10 characters!".to_owned());
+        return ticket_res(user, "Your bottle cannot be less than 10 characters!".into());
     }
+
+    let reply_to = match prefix {
+        Prefix::ReplyPrefix => {
+            //TODO: better things in life, you know. i hate when things are done so lousy, prohibiting the rights of errors. errors need better lives. and in this tempest, they live short. they have the potential to be pronounced, but instead they are discarded to the binary choices of "existent" or "nonexistent". the ultimatum is that when they are declared as either, they die. lost to the void. overwritten with new bits and bytes of blinking lights...
+            let bottle = Bottle::get_last(channelid, conn);
+            Some(bottle)
+        },
+        Prefix::BranchReplyPrefix => {
+            let rbottle = ReceivedBottle::get_last(channelid, conn);
+            Some(rbottle)
+        },
+        Prefix::SendPrefix => None
+    };
+
+    let reply_to = match reply_to {
+        Some(Ok(x)) => Some(x),
+        Some(Err(_)) => return ticket_res(user, "No bottle to reply to was found!".into()),
+        None => None
+    };
 
     user.tickets = 0;
     user.update(conn)?;
 
-    Ok(Ok(MakeBottle { message: msgid, reply_to, channel: channelid, guild, user: user.id, time_pushed: now(), contents, url, image }))
-}
-
-pub fn new_bottle(new_msg: &Message, guild: Option<model::GuildId>, connpool:ConnPool, cfg:Config) -> Res<Option<String>> {
-    trace!("New bottle found");
-    let conn = &connpool.get_conn();
-
-    let bottle =
-        match bottle_from_msg(new_msg, false, guild, conn, &cfg)? {
-            Ok(x) => x,
-            Err(x) => return Ok(x)
-        };
-
-    let bottle = bottle.make(conn)?;
+    let bottle = MakeBottle {
+            message: msgid, reply_to: reply_to.as_ref().map(|r| r.id),
+            channel: channelid, guild, user: user.id,
+            time_pushed: now(), contents, url, image
+        }.make(conn)?;
 
     let mut xp = 0;
 
     xp += PUSHXP;
 
-    if let Some(r) = bottle.reply_to {
-        let replied = Bottle::get(r, conn)?;
-        if replied.user != new_msg.author.id.as_i64() {
-            give_xp(&replied, REPLYXP, conn)?;
+    if let Some(r) = &reply_to {
+        if r.user != new_msg.author.id.as_i64() {
+            give_xp(r, REPLYXP, conn)?;
         }
     }
 
@@ -366,5 +379,5 @@ pub fn new_bottle(new_msg: &Message, guild: Option<model::GuildId>, connpool:Con
         let _ = distribute_bottle(&bottle, &connpool.get_conn(), &cfg);
     });
 
-    Ok(Some("Your message has been ~~discarded~~ pushed into the dark seas of discord!".to_owned()))
+    Ok(Some("Your message has been ~~discarded~~ pushed into the dark seas of discord!".into()))
 }

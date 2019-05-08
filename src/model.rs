@@ -11,8 +11,14 @@ use std::sync::Arc;
 
 use super::schema::*;
 
+pub const SEND_PREFIX: &str = ">";
 pub const REPLY_PREFIX: &str = "->";
-pub const ALT_REPLY_PREFIX: &str = "reply";
+pub const BRANCH_REPLY_PREFIX: &str = "->>";
+
+pub enum Prefix {
+    SendPrefix, ReplyPrefix, BranchReplyPrefix
+}
+
 pub const PUSHXP: i32 = 15;
 pub const REPLYXP: i32 = 65;
 pub const URLXP: i32 = 2;
@@ -106,8 +112,9 @@ pub struct MakeReceivedBottle {
     pub time_recieved: DTime
 }
 
-#[derive(Queryable, Identifiable)]
+#[derive(Queryable, Associations, Identifiable)]
 #[table_name="received_bottle"]
+#[belongs_to(Bottle, foreign_key="bottle")]
 pub struct ReceivedBottle {
     pub id: ReceivedBottleId,
     pub bottle: BottleId,

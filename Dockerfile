@@ -1,7 +1,7 @@
 # thanks https://whitfin.io/speeding-up-rust-docker-builds/
 
 # select build image
-FROM rust:1.30.1 as build
+FROM rust:1.34.1 as build
 
 # create a new empty shell project
 RUN USER=root cargo new --bin bottle

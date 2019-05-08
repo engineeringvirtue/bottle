@@ -91,7 +91,7 @@ impl EventHandler for Handler {
             };
 
             match res {
-                Ok(Some(x)) => new_message.reply(&x).ok(),
+                Ok(Some(x)) => new_message.reply(&*x).ok(),
                 Err(x) => new_message.reply(x.description()).ok(),
                 _ => None
             };

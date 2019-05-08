@@ -219,8 +219,6 @@ struct DUserData {
 const GETUSER: &str = "https://discordapp.com/api/users/@me";
 impl DUserData {
     fn get(access_token: &str) -> Res<Self> {
-        use reqwest;
-
         let res =
             reqwest::Client::new().get(GETUSER).header("Authorization", format!("Bearer {}", access_token)).send()?
             .text()?;
@@ -289,7 +287,7 @@ fn report(req: &mut Request) -> IronResult<Response> {
                 Ok(Response::with((status::Ok, Template::new("reportmade", data))))
             },
             None => {
-                let mut oauth = req.extensions.get::<DOauth2>().unwrap().clone()
+                let oauth = req.extensions.get::<DOauth2>().unwrap().clone()
                     .set_state(session.id.to_string());
 
                 set_session(SessionData {redirect: Some(report_url(bid, &req.get_cfg())), ..session}, req.session());
