@@ -24,9 +24,8 @@ pub const REPLYXP: i32 = 65;
 pub const URLXP: i32 = 2;
 pub const IMAGEXP: i32 = 6;
 pub const REPORTXP: i32 = 20;
-pub const COOLDOWN: i64 = 2;
+pub const COOLDOWN: i64 = 1;
 pub const MAX_TICKETS: i32 = 5;
-pub const MIN_CHARS: usize = 10;
 
 pub type ConnPool = Pool<ConnectionManager<PgConnection>>;
 pub type Conn = PooledConnection<ConnectionManager<PgConnection>>;

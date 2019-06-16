@@ -326,8 +326,8 @@ pub fn new_bottle<'a, 'b>(new_msg: &'a Message, guild: Option<model::GuildId>, c
     let url = new_msg.embeds.get(0).and_then(|emb: &Embed| emb.url.clone());
     let image = new_msg.attachments.get(0).map(|a: &Attachment| a.url.clone());
 
-    if url.is_none() && image.is_none() && contents.len() < MIN_CHARS && !user.admin {
-        return ticket_res(user, "Your bottle cannot be less than 10 characters!".into());
+    if url.is_none() && image.is_none() && contents.len() == 0 && !user.admin {
+        return ticket_res(user, "Your bottle cannot be empty!".into());
     }
 
     let reply_to = match prefix {
