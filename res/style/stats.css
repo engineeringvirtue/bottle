@@ -39,6 +39,7 @@ b {
     padding: 2%;
     border-radius: 5px;
     flex-grow: 0.5;
+    flex-basis: 700px;
 }
 
 .contributions {
