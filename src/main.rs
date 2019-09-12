@@ -22,26 +22,17 @@ extern crate simple_logging;
 #[macro_use]
 extern crate log;
 
-extern crate iron;
-extern crate handlebars_iron;
-extern crate staticfile;
-extern crate mount;
-extern crate router;
-extern crate params;
-extern crate oauth2;
-extern crate reqwest;
-extern crate iron_sessionstorage_0_6;
-
 pub mod schema;
 pub mod data;
 #[macro_use]
 pub mod model;
-pub mod web;
 pub mod bottle;
 
 use std::thread;
+use std::collections::HashMap;
+use std::string::ToString;
 use std::fs::File;
-use std::sync::{Arc};
+use std::sync::{Arc, Mutex};
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
 
@@ -54,118 +45,10 @@ use serenity::CACHE as cache;
 
 use model::*;
 use model::id::*;
-
-const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
-
-fn update_guilds(ctx: &Context) {
-    let guild_count = {
-        cache.read().all_guilds().len()
-    };
-
-    let stats = discord_bots::PostBotStats::new(discord_bots::ServerCount::Single(guild_count));
-    let _ = ctx.get_bots().post_stats(stats);
-}
+use std::time::Duration;
 
 struct Handler;
-impl EventHandler for Handler {
-    fn message(&self, ctx: Context, new_message: Message) {
-        if !new_message.author.bot {
-            let conn = ctx.get_conn();
-
-            let res = match new_message.channel() {
-                Some(Channel::Guild(ref channel)) => {
-                    let channel = channel.read();
-                    let gid = channel.guild_id.as_i64();
-                    debug!("New message in guild {}, looking at db....", gid);
-                    let guilddata = Guild::get(gid, &conn);
-
-                    if Some(channel.id.as_i64()) == guilddata.bottle_channel {
-                        bottle::new_bottle(&new_message, Some(gid), ctx.get_pool(), ctx.get_cfg())
-                    } else {
-                        Ok(None)
-                    }
-                },
-
-                Some(Channel::Private(_)) => bottle::new_bottle(&new_message, None, ctx.get_pool(), ctx.get_cfg()),
-                _ => Ok(None)
-            };
-
-            match res {
-                Ok(Some(x)) => new_message.reply(&*x).ok(),
-                Err(x) => new_message.reply(x.description()).ok(),
-                _ => None
-            };
-        }
-    }
-
-    fn message_delete(&self, ctx: Context, _channel: serenity::model::id::ChannelId, deleted_msg_id: serenity::model::id::MessageId) {
-        debug!("Message {} deleted, checking db...", deleted_msg_id);
-        let conn = &ctx.get_conn();
-        if let Ok(x) = Bottle::get_from_message(deleted_msg_id.as_i64(), conn) {
-            bottle::del_bottle(x, conn, &ctx.get_cfg()).unwrap();
-        }
-    }
-
-    fn reaction_add(&self, ctx: Context, r: Reaction) {
-        let conn = &ctx.get_conn();
-        bottle::react(conn, r, true, &ctx.get_cfg()).unwrap();
-    }
-
-    fn reaction_remove(&self, ctx: Context, r: Reaction) {
-        let conn = &ctx.get_conn();
-        bottle::react(conn, r, false, &ctx.get_cfg()).unwrap();
-    }
-
-    fn guild_create (&self, ctx: Context, guild: serenity::model::guild::Guild, is_new: bool) {
-        let conn = ctx.get_conn();
-        let guilddata = Guild::get(guild.id.as_i64(), &conn);
-        let user = cache.read().user.id.clone();
-
-        if is_new {
-            let general = guild.channels.iter()
-                .find(|&(channelid, _)| guild.permissions_in(channelid, user).send_messages());
-
-            if let Some((channel, _)) = general {
-                let _ = channel.send_message(|x|
-                    x.content("Hey! If you want to receive and send bottles, please set the channel you want to receive them in with ``-configure``. Thanks!"));
-            }
-        }
-
-        guilddata.update(&conn).unwrap();
-        update_guilds(&ctx);
-        info!("Gained guild {}.", &guild.name)
-    }
-
-    fn guild_delete (&self, ctx: Context, incomplete: serenity::model::guild::PartialGuild, _full: Option<Arc<RwLock<serenity::model::guild::Guild>>>) {
-        Guild::del(incomplete.id.as_i64(), &ctx.get_conn()).unwrap();
-
-        update_guilds(&ctx);
-        info!("Guild lost.")
-    }
-
-    fn ready(&self, ctx:Context, _data_about_bot: serenity::model::gateway::Ready) {
-        ctx.set_presence(Some(gateway::Game {kind: gateway::GameType::Listening, name: "you, try -help".to_owned(), url: None})
-                         , serenity::model::user::OnlineStatus::Online);
-
-        let conn = &ctx.get_conn();
-        let mut u = User::get(ctx.get_cfg().auto_admin, conn);
-        u.admin = true;
-        let _ = u.update(conn);
-
-        info!("Client is ready");
-    }
-}
-
-#[cfg(not(debug_assertions))]
-embed_migrations!("migrations/");
-
-#[cfg(not(debug_assertions))]
-fn do_migrations(db: &ConnPool) {
-    embedded_migrations::run_with_output(&db.get_conn(), &mut std::io::stdout()).unwrap();
-}
-
-#[cfg(debug_assertions)]
-fn do_migrations(_: &ConnPool) { }
+impl EventHandler for Handler {}
 
 fn main() {
     kankyo::load_from_reader(&mut File::open("./.env").unwrap()).unwrap();
@@ -173,166 +56,63 @@ fn main() {
     let manager = ConnectionManager::<PgConnection>::new(config.clone().database_url);
     let db = r2d2::Pool::builder().build(manager).expect("Error initializing connection pool.");
 
-    do_migrations(&db);
-
     let log_level = if config.debug_log { log::LevelFilter::Debug }
         else { log::LevelFilter::Error };
 
     simple_logging::log_to_stderr(log_level);
 
-    let webdb = db.clone(); let webcfg = config.clone();
-    thread::spawn( move || web::start_serv(webdb, webcfg));
+    thread::spawn(move || {
+        let mut client = Client::new(&config.token, Handler).expect("Error initializing client.");
+        client.start_autosharded().unwrap();
+    });
 
-    let dbots = Arc::new(discord_bots::Client::new(&config.discord_bots_token));
+    let conn = db.get_conn();
+    let channels = Arc::new(Guild::get_channels(&conn).unwrap());
 
-    let mut client = Client::new(&config.token, Handler).expect("Error initializing client.");
-    client.data.lock().insert::<DBots>(dbots);
-    client.data.lock().insert::<DConn>(db.clone());
-    client.data.lock().insert::<DConfig>(config.clone());
+    let mut num = 15;
 
-    client.with_framework(StandardFramework::new()
-        .configure(|c| c.on_mention(true)
-            .prefix("-").dynamic_prefix(|ctx, msg| {
-            let conn = &ctx.get_conn();
+    loop {
+        for bottle in Bottle::get_range(num, 10, &conn).unwrap() {
+            thread::spawn({
+                let channels = channels.clone();
 
-            msg.guild_id.and_then(|gid| Guild::get(gid.as_i64(), conn).prefix)
-        }))
-        .help(|_f, msg, _opts, _cmds, _args | {
-              msg.reply ("Set a bottle channel with ``-configure <channel>``, then start sending out and replying (prefix your message with ``->`` to bottles there! Or dm me for anonymous bottles! :^) Also try ``-info``")?;
+                move || {
+                    let mut s = String::new();
 
-              Ok(())
-        })
-        .command("configure", |c|
-            c.required_permissions(ADMIN_PERM)
-                .guild_only(true)
-                .exec(| ctx, msg, mut args: serenity::framework::standard::Args | {
-                    let conn = &ctx.get_conn();
-                    let mut guild = Guild::get(msg.guild_id.unwrap().as_i64(), &conn);
+                    s.push_str("**");
 
-                    if let Ok(chan) = args.find::<serenity::model::channel::Channel>() {
-                        guild.bottle_channel = Some(chan.id().as_i64());
-                        guild.update(conn)?;
-
-                        msg.reply("All set!")?;
-                        Ok(())
-                    } else if let Ok(x) = args.find::<char>() {
-                        guild.prefix = Some(x.to_string());
-                        guild.update(conn)?;
-
-                        msg.reply(&format!("Set prefix to \"{}\"!", x))?;
-
-                        Ok(())
-                    } else {
-                        Err("Please specify a valid channel or a single character prefix!".into())
-                    }
-                })
-        )
-        .group("Auto Admin Commands", |g|
-            g.check(|ctx, msg, _args, _opts| {
-                if ctx.get_cfg().auto_admin != msg.author.id.as_i64() {
-                    let _ = msg.reply("You must be an auto admin to do this!");
-                    false
-                } else { true }
-            })
-            .command("mote", |c|
-                c.exec(|ctx, msg, mut args| {
-                    let usr = args.single::<serenity::model::user::User>()
-                        .map_err(|_| "Please specify a user to promote.")?;
-
-                    let conn = &ctx.get_conn();
-                    let mut u = User::get(usr.id.as_i64(), conn);
-                    if !u.admin {
-                        u.admin = true;
-                        msg.reply(&format!("Promoted {}", usr.tag()))?;
-                    } else {
-                        u.admin = false;
-                        msg.reply(&format!("Demoted {}", usr.tag()))?;
+                    match &bottle.guild {
+                        Some(_) => s.push_str(&serenity::model::id::UserId(bottle.user as u64).mention()),
+                        None => s.push_str("anon")
                     }
 
-                    u.update(conn)?;
-                    Ok(())
-                })
-            )
-            .command("announce", |c|
-                c.exec(|ctx, msg, args| {
-                    let announcement = args.rest();
+                    s.push_str(&format!(" / {}:**\n", bottle.id.to_string()));
 
-                    let conn = &ctx.get_conn();
-                    for x in cache.read().all_guilds() {
-                        if let Some(c) = Guild::get(x.as_i64(), conn).bottle_channel {
-                            let cid = serenity::model::id::ChannelId(c as u64);
-                            let _ = cid.send_message(|x| x.content(announcement));
-                        }
+                    match &bottle.reply_to {
+                        Some(id) => s.push_str(&format!(">>{} ", id)),
+                        None => ()
                     }
 
-                    info!("{} sent {} to all guilds!", msg.author.tag(), announcement);
-                    msg.reply("Sent to all guilds!")?;
-                    Ok(())
-                })
-            )
-        )
-        .command("info", |c|
-            c.guild_only(true).exec(|ctx, msg, _args| {
-                let conn = &ctx.get_conn();
-                let gdata = Guild::get(msg.guild_id.unwrap().as_i64(), conn);
-                let gdata_xp = gdata.get_xp(conn)?;
+                    s.push_str(&bottle.contents);
 
-                let guild_channel = msg.channel().unwrap().guild().unwrap();
-                let guild = guild_channel.read().guild().unwrap();
+                    if let Some(url) = &bottle.url {
+                        s.push(' ');
+                        s.push_str(url);
+                    }
 
-                guild_channel.read().send_message(|msg| msg.embed(|embed| {
-                    let public = match gdata.invite.as_ref() {
-                        Some(inv) => inv,
-                        None => "Use -publicize to generate an invite!"
-                    };
+                    if let Some(image) = &bottle.image {
+                        s.push(' ');
+                        s.push_str(image);
+                    }
 
-                    let bottle_channel = match gdata.bottle_channel.as_ref() {
-                        Some(cid) => serenity::model::id::ChannelId(*cid as u64).mention(),
-                        None => "Set with -configure <channel>".to_owned()
-                    };
+                    for channel in channels.iter() {
+                        let channel = serenity::model::id::ChannelId(*channel as u64);
+                        let _ = channel.send_message(|x| x.content(&s));
+                    }
+                }
+            });
+        }
 
-                    embed.title(guild.read().name.clone())
-                        .field("Prefix", gdata.prefix.as_ref().map(String::as_str).unwrap_or_else(|| "Use -prefix to set a custom prefix"), true)
-                        .field("XP", gdata_xp, true)
-                        .field("Bottle channel", bottle_channel, true)
-                        .field("Public", public, true)
-
-                        .url(guild_url(gdata.id, &ctx.get_cfg()))
-                }))?;
-
-                Ok(())
-            })
-        )
-        .command("publicize", |c|
-            c.guild_only(true).required_permissions(ADMIN_PERM)
-                .exec(|ctx, msg, _args| {
-                let conn = &ctx.get_conn();
-                let mut gdata = Guild::get(msg.guild_id.unwrap().as_i64(), conn);
-
-                let guildc = msg.channel().unwrap().guild().unwrap();
-                let inv = guildc.read().create_invite(|x| x.max_age(0).temporary(true))?;
-                gdata.invite = Some(inv.url());
-                gdata.update(conn)?;
-
-                msg.reply("Guild publicized!")?;
-                Ok(())
-            })
-        )
-
-        .on_dispatch_error(| _ctx, msg, err | {
-            match err {
-                DispatchError::LackOfPermissions(_) => {
-                    let _ = msg.reply("You lack permission to do this! Please make sure you are an administrator.");
-                },
-                _ => ()
-            }
-        })
-        .after(|_ctx, msg, _, res| {
-            if let Err(CommandError(str)) = res {
-                let _ = msg.reply(&str);
-            }
-        })
-    );
-
-    client.start_autosharded().unwrap();
+        num += 10;
+    }
 }

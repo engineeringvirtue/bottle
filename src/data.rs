@@ -86,6 +86,14 @@ impl User {
 }
 
 impl Guild {
+    pub fn get_channels(conn: &Conn) -> Res<Vec<i64>> {
+        let opt_vec: Vec<Option<i64>> =
+            guild::table.filter(guild::bottle_channel.is_not_null())
+                .select(guild::bottle_channel).load(conn)?;
+
+        Ok(opt_vec.into_iter().flatten().collect())
+    }
+
     pub fn get(gid: GuildId, conn:&Conn) -> Self {
         guild::table.find(gid).first(conn).unwrap_or_else(|_| Guild::new(gid))
     }
@@ -133,6 +141,12 @@ impl MakeBottle {
 impl Bottle {
     pub fn get(id:BottleId, conn:&Conn) -> Res<Self> {
         bottle::table.find(id).get_result(conn)
+    }
+
+    pub fn get_range(first: BottleId, amount: i64, conn: &Conn) -> Res<Vec<Self>> {
+        bottle::table.filter(bottle::deleted.eq(false))
+            .order(bottle::time_pushed.asc()).offset(first).limit(amount)
+            .load(conn)
     }
 
     pub fn get_from_message(mid: i64, conn: &Conn) -> Res<Bottle> {

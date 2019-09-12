@@ -1,7 +1,6 @@
 use serenity;
 use typemap::Key;
 use chrono;
-use oauth2;
 pub use std::error::Error;
 use uuid::Uuid;
 use diesel::prelude::*;
@@ -205,11 +204,6 @@ pub fn get_user_name(id: UserId) -> String {
 pub struct DConfig;
 impl Key for DConfig {
     type Value = Config;
-}
-
-pub struct DOauth2;
-impl Key for DOauth2 {
-    type Value = oauth2::Config;
 }
 
 pub struct DBots;
